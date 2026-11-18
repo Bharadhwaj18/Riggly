@@ -52,7 +52,6 @@ export function CloseKitSteps({ lines, tappedBy, onClose, onCancel }: {
   const went = lines.reduce((n, l) => n + l.taken, 0)
   const soldAtStall = lines.reduce((n, l) => n + l.sold, 0)
   const shouldRemain = lines.reduce((n, l) => n + kitLeft(l.taken, l.sold), 0)
-  const remainingNow = counts.reduce((n, c) => n + c.returned, 0)
   const soldTotal = counts.reduce((n, c) => n + c.soldTotal, 0)
   const given = counts.reduce((n, c) => n + c.given, 0)
   const lost = counts.reduce((n, c) => n + c.lost, 0)
@@ -79,21 +78,27 @@ export function CloseKitSteps({ lines, tappedBy, onClose, onCancel }: {
 
       {step === 1 && (
         <>
-          <div>
-            <p className="text-lg font-bold text-gray-900">Is everything else still remaining?</p>
-            <p className="text-sm text-gray-500">{went} went · {soldAtStall} sold at the stall</p>
-            <p className="mt-2 text-3xl font-bold tabular-nums text-gray-900">{shouldRemain} remaining</p>
-          </div>
+          {!differs ? (
+            <>
+              <div>
+                <p className="text-lg font-bold text-gray-900">Here’s what the stall recorded</p>
+                <p className="text-sm text-gray-500">{went} went · {soldAtStall} sold · {shouldRemain} should be remaining</p>
+              </div>
+              <ItemTable rows={lines.map(l => ({ key: l.variantId, name: `${l.itemName} · ${l.label}`, sold: l.sold, remaining: kitLeft(l.taken, l.sold) }))} />
+              <p className="font-semibold text-gray-900">Is that what’s remaining?</p>
+            </>
+          ) : null}
           {!differs ? (
             <div className="grid gap-2">
               <Button onClick={() => { setRemaining(Object.fromEntries(lines.map(l => [l.variantId, kitLeft(l.taken, l.sold)]))); setReasons({}); setStep(2) }}>
-                <Check className="h-4 w-4" />Yes, all {shouldRemain} are remaining
+                <Check className="h-4 w-4" />Yes, that’s right
               </Button>
               <Button variant="secondary" onClick={() => setDiffers(true)}>No, something’s different</Button>
             </div>
           ) : (
             <>
-              <p className="text-xs text-gray-500">Set how many of each are remaining. For anything missing, say what happened to it.</p>
+              <p className="text-lg font-bold text-gray-900">What’s actually remaining?</p>
+              <p className="text-xs text-gray-500">Change the items that differ. For anything missing, say what happened to it.</p>
               <ul className="max-h-[45vh] divide-y divide-brand-100 overflow-y-auto rounded-xl border border-brand-100">
                 {counts.map(c => {
                   const l = lines.find(x => x.variantId === c.variantId)!
@@ -183,9 +188,14 @@ export function CloseKitSteps({ lines, tappedBy, onClose, onCancel }: {
       {step === 3 && (
         <>
           <p className="text-lg font-bold text-gray-900">Close the kit?</p>
+          <ItemTable
+            rows={counts.map(c => {
+              const l = lines.find(x => x.variantId === c.variantId)!
+              return { key: c.variantId, name: `${l.itemName} · ${l.label}`, sold: c.soldTotal, remaining: c.returned, note: [c.given && `${c.given} given away`, c.lost && `${c.lost} lost`].filter(Boolean).join(', ') }
+            })}
+          />
           <ul className="divide-y divide-brand-100 rounded-xl border border-brand-100 text-sm">
-            <Row label="Sold" value={String(soldTotal)} />
-            <Row label="Remaining" value={String(remainingNow)} />
+            <Row label={`Sold (${soldTotal}) should bring in`} value={money(shouldBe)} />
             {given + lost > 0 && <Row label="Given away / lost" value={`${given} / ${lost}`} />}
             <Row label="Handing in" value={money(handing)} strong />
           </ul>
@@ -207,6 +217,40 @@ export function CloseKitSteps({ lines, tappedBy, onClose, onCancel }: {
           : <span />}
         <button type="button" onClick={onCancel} className="text-sm text-gray-500 hover:text-gray-900">Not now</button>
       </div>
+    </div>
+  )
+}
+
+/** Each item with how many sold and how many are remaining, plus totals. */
+function ItemTable({ rows }: { rows: { key: string; name: string; sold: number; remaining: number; note?: string }[] }) {
+  const shown = rows.filter(r => r.sold || r.remaining || r.note)
+  return (
+    <div className="max-h-[40vh] overflow-y-auto rounded-xl border border-brand-100">
+      <table className="w-full text-sm">
+        <thead className="sticky top-0 bg-white">
+          <tr className="text-left text-[11px] font-bold uppercase tracking-wide text-gray-500">
+            <th className="px-3 py-2 font-bold">Item</th>
+            <th className="px-2 py-2 text-right font-bold">Sold</th>
+            <th className="px-3 py-2 text-right font-bold">Remaining</th>
+          </tr>
+        </thead>
+        <tbody>
+          {shown.map(r => (
+            <tr key={r.key} className="border-t border-brand-100">
+              <td className="px-3 py-1.5 text-gray-900">{r.name}{r.note && <span className="block text-[11px] text-amber-600">{r.note}</span>}</td>
+              <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-gray-900">{r.sold}</td>
+              <td className="px-3 py-1.5 text-right tabular-nums text-gray-900">{r.remaining}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr className="border-t border-brand-200 font-semibold text-gray-900">
+            <td className="px-3 py-1.5">Total</td>
+            <td className="px-2 py-1.5 text-right tabular-nums">{shown.reduce((n, r) => n + r.sold, 0)}</td>
+            <td className="px-3 py-1.5 text-right tabular-nums">{shown.reduce((n, r) => n + r.remaining, 0)}</td>
+          </tr>
+        </tfoot>
+      </table>
     </div>
   )
 }
