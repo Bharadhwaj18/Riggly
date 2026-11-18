@@ -213,7 +213,9 @@ export function KitView({ kit, show, lines, sales, people, userId, can, members,
       )}
 
       <Modal open={closing} onOpenChange={setClosing} title="Close the kit" description="Count what came back and the money you’re handing in." className="max-w-xl">
-        {closing && <CloseForm kitId={kit.id} lines={lines} tappedMoney={tapped.reduce((n, s) => n + saleTakings(s), 0)} onDone={() => setClosing(false)} />}
+        {closing && <CloseForm kitId={kit.id} lines={lines} tappedMoney={tapped.reduce((n, s) => n + saleTakings(s), 0)}
+          tappedBy={{ cash: tapped.reduce((n, s) => n + Number(s.cash_amount), 0), upi: tapped.reduce((n, s) => n + Number(s.upi_amount), 0), card: tapped.reduce((n, s) => n + Number(s.card_amount), 0) }}
+          onDone={() => setClosing(false)} />}
       </Modal>
       <Modal open={changingCrew} onOpenChange={setChangingCrew} title="Change the crew" description="Whoever you take off loses access to this kit straight away. Anyone new is told.">
         {changingCrew && <CrewForm kit={kit} people={crewPeople} onDone={() => setChangingCrew(false)} />}
@@ -316,11 +318,15 @@ function StallPanel({ kitId, lines }: { kitId: string; lines: KitLineView[] }) {
 
 // ---- Closing the kit ----------------------------------------------------------------------------------------------------
 
-function CloseForm({ kitId, lines, tappedMoney, onDone }: { kitId: string; lines: KitLineView[]; tappedMoney: number; onDone: () => void }) {
+function CloseForm({ kitId, lines, tappedMoney, tappedBy, onDone }: { kitId: string; lines: KitLineView[]; tappedMoney: number; tappedBy: { cash: number; upi: number; card: number }; onDone: () => void }) {
   const { money, symbol } = useMoney()
   const run = useRun()
-  const [counts, setCounts] = useState<Record<string, { returned: string; given: string; lost: string }>>({})
-  const [paid, setPaid] = useState({ cash: '', upi: '', card: '' })
+  // Filled in from the stall: whatever wasn't sold came back, nothing given away or lost, and the money is what the
+  // stall recorded. Change anything that's different.
+  const [counts, setCounts] = useState<Record<string, { returned: string; given: string; lost: string }>>(() =>
+    Object.fromEntries(lines.map(l => [l.variantId, { returned: String(kitLeft(l.taken, l.sold)), given: '', lost: '' }])))
+  const amount = (n: number) => (n > 0 ? String(Math.round(n * 100) / 100) : '')
+  const [paid, setPaid] = useState({ cash: amount(tappedBy.cash), upi: amount(tappedBy.upi), card: amount(tappedBy.card) })
   const [notes, setNotes] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -378,7 +384,7 @@ function CloseForm({ kitId, lines, tappedMoney, onDone }: { kitId: string; lines
           </tbody>
         </table>
       </div>
-      <p className="text-xs text-gray-500">Anything that went out, wasn’t tapped, and didn’t come back, get given away or go missing counts as sold.</p>
+      <p className="text-xs text-gray-500">Filled in from the stall’s sales: everything not sold is counted as back. Change any count that’s different. Anything that went out, wasn’t tapped, and didn’t come back, get given away or go missing counts as sold.</p>
       {problems.length > 0 && <p className="text-sm text-red-700">More is counted than went out on {problems.length === 1 ? 'one item' : `${problems.length} items`}.</p>}
 
       <div>
@@ -391,7 +397,7 @@ function CloseForm({ kitId, lines, tappedMoney, onDone }: { kitId: string; lines
             </div>
           ))}
         </div>
-        {tappedMoney > 0 && <p className="mt-1 text-xs text-gray-500">{money(tappedMoney)} was recorded at the stall.</p>}
+        <p className="mt-1 text-xs text-gray-500">{tappedMoney > 0 ? `Filled in with the ${money(tappedMoney)} recorded at the stall. Change it to what you’re actually handing in.` : 'Enter what you’re handing in.'}</p>
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="close-notes">Notes</Label>

@@ -38,7 +38,7 @@ interface Props {
 
 /** Packing a kit: which show, who runs the stall, and how many of each size go in the box. */
 export function KitForm({ kitId, shows, members, rows, initial }: Props) {
-  const { money, symbol } = useMoney()
+  const { symbol } = useMoney()
   const router = useRouter()
   const toast = useToast()
   const [showId, setShowId] = useState(initial.showId)
@@ -46,7 +46,8 @@ export function KitForm({ kitId, shows, members, rows, initial }: Props) {
   const [helperIds, setHelperIds] = useState<string[]>(initial.helperIds)
   const [notes, setNotes] = useState(initial.notes)
   const [taken, setTaken] = useState<Record<string, string>>(Object.fromEntries(rows.filter(r => r.taken > 0).map(r => [r.variantId, String(r.taken)])))
-  const [prices, setPrices] = useState<Record<string, string>>(Object.fromEntries(rows.filter(r => r.showPrice != null).map(r => [r.variantId, String(r.showPrice)])))
+  // Every price starts filled in (the show price if one was set, else the usual price), so nothing has to be typed.
+  const [prices, setPrices] = useState<Record<string, string>>(Object.fromEntries(rows.map(r => [r.variantId, String(r.showPrice ?? r.price)])))
   const [busy, setBusy] = useState(false)
 
   const units = rows.reduce((n, r) => n + Math.max(0, Math.trunc(Number(taken[r.variantId] || 0))), 0)
@@ -57,7 +58,11 @@ export function KitForm({ kitId, shows, members, rows, initial }: Props) {
     setBusy(true)
     const res = await saveMerchKit({
       id: kitId, showId, leadId: leadId || null, helperIds, notes,
-      lines: rows.map(r => ({ variantId: r.variantId, taken: Number(taken[r.variantId] || 0), price: prices[r.variantId] ? Number(prices[r.variantId]) : null })),
+      // Only a price that differs from the usual one is kept as a show price.
+      lines: rows.map(r => {
+        const p = prices[r.variantId]
+        return { variantId: r.variantId, taken: Number(taken[r.variantId] || 0), price: p !== '' && p != null && Number(p) !== r.price ? Number(p) : null }
+      }),
     })
     setBusy(false)
     if (res.error) { toast(res.error, 'error'); return }
@@ -127,7 +132,7 @@ export function KitForm({ kitId, shows, members, rows, initial }: Props) {
           </table>
         </div>
       )}
-      <p className="mt-2 text-xs text-gray-500">Show price is optional ({symbol}); empty uses the usual price, e.g. {money(rows[0]?.price ?? 0)}.</p>
+      <p className="mt-2 text-xs text-gray-500">Prices ({symbol}) are filled in with each item’s usual price. Change one only if it sells for something else at this show; clearing it goes back to the usual price.</p>
       {over.length > 0 && <p className="mt-2 text-sm text-red-700">Taking more than is at home on {over.length === 1 ? 'one item' : `${over.length} items`}.</p>}
 
       <div className="mt-5 flex items-center justify-between gap-3">
