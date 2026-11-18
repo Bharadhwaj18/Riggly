@@ -25,14 +25,19 @@ const METHODS = [
 
 type Paid = { cash: number; upi: number; card: number }
 
+export interface SaleItem { name: string; qty: number; price: number }
+export interface StallSale { id: string; at: string; items: SaleItem[]; method: string; amount: number }
+
 /**
  * End of night in three steps, each already answered from what the stall recorded:
  *   1. Stock: is everything that wasn't sold still remaining? Only if not, change the items that differ.
  *   2. Money: does it match what those sales should bring in? Only if not, enter what you have.
  *   3. Check the summary and close.
  */
-export function CloseKitSteps({ lines, tappedBy, onClose, onCancel }: {
+export function CloseKitSteps({ lines, stallSales, tappedBy, onClose, onCancel }: {
   lines: KitLineView[]
+  /** Every sale tapped at the stall, oldest first in the table. */
+  stallSales: StallSale[]
   tappedBy: Paid
   onClose: (counts: { variantId: string; returned: number; given: number; lost: number }[], paid: Paid, notes: string) => Promise<boolean>
   onCancel: () => void
@@ -148,6 +153,11 @@ export function CloseKitSteps({ lines, tappedBy, onClose, onCancel }: {
             <p className="text-sm text-gray-500">{soldTotal} sold should bring in</p>
             <p className="mt-2 text-3xl font-bold tabular-nums text-gray-900">{money(shouldBe)}</p>
           </div>
+          <SalesTable sales={stallSales} untapped={counts.flatMap(c => {
+            const extra = c.soldTotal - (lines.find(l => l.variantId === c.variantId)?.sold ?? 0)
+            const l = lines.find(x => x.variantId === c.variantId)!
+            return extra > 0 ? [{ name: `${l.itemName} · ${l.label}`, qty: extra, price: c.price }] : []
+          })} />
           {!moneyDiffers ? (
             <>
               <ul className="divide-y divide-brand-100 rounded-xl border border-brand-100 text-sm">
@@ -217,6 +227,60 @@ export function CloseKitSteps({ lines, tappedBy, onClose, onCancel }: {
           : <span />}
         <button type="button" onClick={onCancel} className="text-sm text-gray-500 hover:text-gray-900">Not now</button>
       </div>
+    </div>
+  )
+}
+
+/** Every sale at the stall (time, what was bought, how it was paid, amount), plus anything sold but not tapped. */
+function SalesTable({ sales, untapped }: { sales: StallSale[]; untapped: SaleItem[] }) {
+  const { money } = useMoney()
+  const describe = (items: SaleItem[]) => items.length ? items.map(i => (i.qty > 1 ? `${i.name} × ${i.qty}` : i.name)).join(', ') : 'No items'
+  const ordered = [...sales].sort((a, b) => a.at.localeCompare(b.at))
+  const untappedValue = untapped.reduce((n, i) => n + i.qty * i.price, 0)
+  const total = ordered.reduce((n, s) => n + s.amount, 0)
+  if (!ordered.length && !untapped.length) return <p className="text-sm text-gray-500">Nothing was sold.</p>
+  return (
+    <div className="max-h-[40vh] overflow-y-auto rounded-xl border border-brand-100">
+      <table className="w-full text-sm">
+        <thead className="sticky top-0 bg-white">
+          <tr className="text-left text-[11px] font-bold uppercase tracking-wide text-gray-500">
+            <th className="px-3 py-2 font-bold">Time</th>
+            <th className="px-2 py-2 font-bold">Bought</th>
+            <th className="px-2 py-2 font-bold">Paid by</th>
+            <th className="px-3 py-2 text-right font-bold">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {ordered.map(s => {
+            const list = s.items.reduce((n, i) => n + i.qty * i.price, 0)
+            return (
+              <tr key={s.id} className="border-t border-brand-100 align-top">
+                <td className="whitespace-nowrap px-3 py-1.5 text-gray-500">{new Date(s.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</td>
+                <td className="px-2 py-1.5 text-gray-900">
+                  {describe(s.items)}
+                  {Math.abs(list - s.amount) > 0.5 && <span className="block text-[11px] text-amber-600">{s.amount < list ? `${money(list - s.amount)} discount` : `${money(s.amount - list)} over list price`}</span>}
+                </td>
+                <td className="px-2 py-1.5 text-gray-600">{s.method}</td>
+                <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-gray-900">{money(s.amount)}</td>
+              </tr>
+            )
+          })}
+          {untapped.length > 0 && (
+            <tr className="border-t border-brand-100 align-top">
+              <td className="px-3 py-1.5 text-gray-500">Not tapped</td>
+              <td className="px-2 py-1.5 text-gray-900">{describe(untapped)}<span className="block text-[11px] text-gray-500">Sold but not recorded at the stall</span></td>
+              <td className="px-2 py-1.5 text-gray-600">Cash?</td>
+              <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-gray-900">{money(untappedValue)}</td>
+            </tr>
+          )}
+        </tbody>
+        <tfoot>
+          <tr className="border-t border-brand-200 font-semibold text-gray-900">
+            <td className="px-3 py-1.5" colSpan={3}>{ordered.length} sale{ordered.length === 1 ? '' : 's'}{untapped.length ? ' + not tapped' : ''}</td>
+            <td className="px-3 py-1.5 text-right tabular-nums">{money(total + untappedValue)}</td>
+          </tr>
+        </tfoot>
+      </table>
     </div>
   )
 }

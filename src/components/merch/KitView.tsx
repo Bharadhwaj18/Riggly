@@ -18,7 +18,7 @@ import { formatDateDMY } from '@/lib/dates'
 import { KIT_STATUS_LABELS, expectedTotal, kitLeft, saleTakings, type KitStatus, type MerchKit, type MerchSale, type PaymentMethod } from '@/lib/merch'
 import { approveMerchKit, closeMerchKit, deleteMerchKit, recordKitSale, reopenMerchKit, setMerchKitCrew, undoKitSale } from '@/actions/merch-kits'
 import { CrewPicker, type CrewPerson } from './CrewPicker'
-import { CloseKitSteps } from './CloseKitSteps'
+import { CloseKitSteps, type SaleItem } from './CloseKitSteps'
 
 export interface KitLineView {
   variantId: string
@@ -38,6 +38,8 @@ interface Props {
   show: { id: string | null; title: string; show_date: string | null; venue: string | null } | null
   lines: KitLineView[]
   sales: MerchSale[]
+  /** What each sale was: items, how many, at what price. */
+  saleItems: Record<string, SaleItem[]>
   people: { lead: string | null; helpers: string[]; nameOf: Record<string, string> }
   userId: string
   can: { sell: boolean; pack: boolean; approve: boolean; fullView: boolean }
@@ -66,7 +68,7 @@ function useRun() {
   }
 }
 
-export function KitView({ kit, show, lines, sales, people, userId, can, members, crewPeople, accounts }: Props) {
+export function KitView({ kit, show, lines, sales, saleItems, people, userId, can, members, crewPeople, accounts }: Props) {
   const { money } = useMoney()
   const router = useRouter()
   const run = useRun()
@@ -216,6 +218,13 @@ export function KitView({ kit, show, lines, sales, people, userId, can, members,
         {closing && (
           <CloseKitSteps
             lines={lines}
+            stallSales={tapped.map(s => ({
+              id: s.id,
+              at: s.created_at,
+              items: saleItems[s.id] ?? [],
+              method: Number(s.cash_amount) ? 'Cash' : Number(s.upi_amount) ? 'UPI' : Number(s.card_amount) ? 'Card' : 'Free',
+              amount: saleTakings(s),
+            }))}
             tappedBy={{ cash: tapped.reduce((n, s) => n + Number(s.cash_amount), 0), upi: tapped.reduce((n, s) => n + Number(s.upi_amount), 0), card: tapped.reduce((n, s) => n + Number(s.card_amount), 0) }}
             onCancel={() => setClosing(false)}
             onClose={async (counts, paid, notes) => {

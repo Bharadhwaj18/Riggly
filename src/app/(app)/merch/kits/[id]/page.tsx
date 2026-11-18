@@ -52,6 +52,12 @@ export default async function MerchKitPage({ params }: { params: Promise<{ id: s
       show={show}
       lines={lines}
       sales={sales}
+      saleItems={Object.fromEntries(sales.map(s => [s.id, moves
+        .filter(m => m.sale_id === s.id && m.reason === 'sale')
+        .map(m => {
+          const l = lines.find(x => x.variantId === m.variant_id)
+          return { name: l ? `${l.itemName} · ${l.label}` : 'Item', qty: -m.qty, price: Number(m.unit_price ?? l?.price ?? 0) }
+        })]))}
       people={{ lead: kit.lead_id ? nameOf(kit.lead_id) : null, helpers: kit.helper_ids.map(nameOf), nameOf: Object.fromEntries(profiles.map(p => [p.id, nameOf(p.id)])) }}
       userId={user.id}
       can={{ sell: onKit || canEdit, pack: approver, approve: approver, fullView: scope === 'full' }}
