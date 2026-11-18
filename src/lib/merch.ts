@@ -164,7 +164,7 @@ export function soldFromCount(tookOut: number, broughtBack: number): { sold: num
   const out = Math.trunc(tookOut || 0)
   const back = Math.trunc(broughtBack || 0)
   if (out < 0 || back < 0) return { error: 'Counts can’t be negative.' }
-  if (back > out) return { error: 'More came back than went out.' }
+  if (back > out) return { error: 'More remaining than went out.' }
   return { sold: out - back }
 }
 
@@ -230,4 +230,34 @@ export const KIT_STATUS_LABELS: Record<KitStatus, string> = { open: 'At the show
 export function crossedLowStock(stockNow: number, change: number, lowAt: number | null): boolean {
   if (lowAt == null || change >= 0) return false
   return stockNow - change > lowAt && stockNow <= lowAt
+}
+
+/** What happened to items that should still be remaining but aren't. */
+export type ShortReason = 'sold' | 'given' | 'lost'
+
+/**
+ * The end-of-night counts for each item in a kit. What should be remaining is what went minus what the stall sold;
+ * anything short of that was sold (not tapped), given away or lost, as chosen (sold if nothing was chosen).
+ */
+export function closeoutCounts(
+  lines: { variantId: string; taken: number; sold: number; price: number }[],
+  remaining: Record<string, number>,
+  reasons: Record<string, ShortReason>,
+) {
+  return lines.map(l => {
+    const left = kitLeft(l.taken, l.sold)
+    const returned = Math.min(left, Math.max(0, Math.trunc(remaining[l.variantId] ?? left)))
+    const short = left - returned
+    const reason: ShortReason = reasons[l.variantId] ?? 'sold'
+    return {
+      variantId: l.variantId,
+      price: l.price,
+      returned,
+      short,
+      reason,
+      given: reason === 'given' ? short : 0,
+      lost: reason === 'lost' ? short : 0,
+      soldTotal: l.sold + (reason === 'sold' ? short : 0),
+    }
+  })
 }

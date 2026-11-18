@@ -234,7 +234,7 @@ function StallMode({ items, variants, stockOf, priceOf, onSave }: {
   )
 }
 
-// ---- End of night: what went out, what came back, what was taken ---------------------------------------------------
+// ---- End of night: what went out, what’s remaining, what was taken ---------------------------------------------------
 
 function CountMode({ items, variants, stockOf, priceOf, onSave }: {
   items: MerchItem[]
@@ -277,7 +277,7 @@ function CountMode({ items, variants, stockOf, priceOf, onSave }: {
             <tr className="text-left text-[11px] font-bold uppercase tracking-wide text-gray-500">
               <th className="px-4 py-2 font-bold">Item</th>
               <th className="px-2 py-2 text-right font-bold">Took</th>
-              <th className="px-2 py-2 text-right font-bold">Back</th>
+              <th className="px-2 py-2 text-right font-bold">Remaining</th>
               <th className="px-4 py-2 text-right font-bold">Sold</th>
             </tr>
           </thead>
@@ -291,7 +291,7 @@ function CountMode({ items, variants, stockOf, priceOf, onSave }: {
                     <span className="block text-[11px] text-gray-500">{stockOf(v.id)} in stock · {money(priceOf(v))}</span>
                   </td>
                   <td className="px-2 py-1.5 text-right"><input aria-label={`${item.name} ${v.label} took out`} type="number" inputMode="numeric" min={0} step={1} className={cell} value={r.c.out} onChange={e => set(v.id, 'out', e.target.value)} /></td>
-                  <td className="px-2 py-1.5 text-right"><input aria-label={`${item.name} ${v.label} brought back`} type="number" inputMode="numeric" min={0} step={1} className={cell} value={r.c.back} onChange={e => set(v.id, 'back', e.target.value)} /></td>
+                  <td className="px-2 py-1.5 text-right"><input aria-label={`${item.name} ${v.label} remaining`} type="number" inputMode="numeric" min={0} step={1} className={cell} value={r.c.back} onChange={e => set(v.id, 'back', e.target.value)} /></td>
                   <td className={cn('px-4 py-1.5 text-right font-semibold tabular-nums', 'error' in r.result ? 'text-red-700' : 'text-gray-900')}>
                     {'error' in r.result ? '!' : r.result.sold || ''}
                   </td>
@@ -301,7 +301,7 @@ function CountMode({ items, variants, stockOf, priceOf, onSave }: {
           </tbody>
         </table>
       </div>
-      {problems.length > 0 && <p className="text-sm text-red-700">{problems.length === 1 ? 'One row has' : `${problems.length} rows have`} more coming back than went out.</p>}
+      {problems.length > 0 && <p className="text-sm text-red-700">{problems.length === 1 ? 'One row has' : `${problems.length} rows have`} more remaining than went out.</p>}
 
       <div className="rounded-2xl border border-brand-200 bg-white p-4 shadow-sm">
         <div className="grid grid-cols-3 gap-3">
@@ -324,7 +324,7 @@ function CountMode({ items, variants, stockOf, priceOf, onSave }: {
             </p>
           </div>
           <ReasonButton onClick={save} loading={busy}
-            blocked={problems.length ? 'Some rows have more coming back than went out (marked !).' : lines.length === 0 && taken === 0 ? 'Enter what went out and came back, or the money taken.' : null}>
+            blocked={problems.length ? 'Some rows have more remaining than went out (marked !).' : lines.length === 0 && taken === 0 ? 'Enter what went out and what’s remaining, or the money taken.' : null}>
             Save count
           </ReasonButton>
         </div>

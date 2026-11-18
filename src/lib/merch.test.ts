@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { closeoutSold, countFixFor, crossedLowStock, kitLeft, kitSoldByVariant, outInKits, expectedTotal, groupSalesByShow, isLowStock, parseVariantLabels, saleTakings, signedQty, soldFromCount, statsByVariant, statsFor, sumStats, unitCostOf, variantPrice } from './merch'
+import { closeoutCounts, closeoutSold, countFixFor, crossedLowStock, kitLeft, kitSoldByVariant, outInKits, expectedTotal, groupSalesByShow, isLowStock, parseVariantLabels, saleTakings, signedQty, soldFromCount, statsByVariant, statsFor, sumStats, unitCostOf, variantPrice } from './merch'
 
 const move = (variant_id: string, qty: number, reason: string, unit_cost: number | null = null, unit_price: number | null = null) =>
   ({ variant_id, qty, reason, unit_cost, unit_price })
@@ -95,7 +95,7 @@ describe('sales helpers', () => {
   it('works out units sold from an end-of-night count', () => {
     expect(soldFromCount(20, 12)).toEqual({ sold: 8 })
     expect(soldFromCount(5, 5)).toEqual({ sold: 0 })
-    expect(soldFromCount(3, 4)).toEqual({ error: 'More came back than went out.' })
+    expect(soldFromCount(3, 4)).toEqual({ error: 'More remaining than went out.' })
     expect(soldFromCount(-1, 0)).toEqual({ error: 'Counts can’t be negative.' })
   })
   it('groups sales by show, newest first, with no-show sales on their own', () => {
@@ -155,5 +155,26 @@ describe('crossedLowStock', () => {
     expect(crossedLowStock(0, -4, 0)).toBe(true)   // sold out
     expect(crossedLowStock(5, 2, 5)).toBe(false)   // stock coming in
     expect(crossedLowStock(1, -5, null)).toBe(false) // no level set
+  })
+})
+
+describe('closeoutCounts', () => {
+  const lines = [
+    { variantId: 'm', taken: 10, sold: 4, price: 500 },
+    { variantId: 'l', taken: 5, sold: 5, price: 500 },
+  ]
+  it('starts with everything not sold still remaining', () => {
+    expect(closeoutCounts(lines, {}, {}).map(c => [c.returned, c.short, c.soldTotal])).toEqual([[6, 0, 4], [0, 0, 5]])
+  })
+  it('counts a shortfall as sold unless a reason is picked', () => {
+    const [m] = closeoutCounts(lines, { m: 4 }, {})
+    expect(m).toMatchObject({ returned: 4, short: 2, given: 0, lost: 0, soldTotal: 6 })
+    const [g] = closeoutCounts(lines, { m: 4 }, { m: 'given' })
+    expect(g).toMatchObject({ given: 2, lost: 0, soldTotal: 4 })
+    const [x] = closeoutCounts(lines, { m: 3 }, { m: 'lost' })
+    expect(x).toMatchObject({ lost: 3, soldTotal: 4 })
+  })
+  it('never counts more remaining than should be, or fewer than none', () => {
+    expect(closeoutCounts(lines, { m: 99, l: -2 }, {}).map(c => c.returned)).toEqual([6, 0])
   })
 })

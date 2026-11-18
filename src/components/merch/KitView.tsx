@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Check, ChevronLeft, Minus, Pencil, Plus, RotateCcw, Trash2, Undo2, Users } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
-import { ReasonButton } from '@/components/ui/ReasonButton'
 import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
 import { Modal } from '@/components/ui/Modal'
@@ -16,9 +15,10 @@ import { useToast } from '@/components/ui/Toaster'
 import { useMoney } from '@/components/finance/FinanceSettingsContext'
 import { cn } from '@/lib/utils'
 import { formatDateDMY } from '@/lib/dates'
-import { KIT_STATUS_LABELS, closeoutSold, expectedTotal, kitLeft, saleTakings, type KitStatus, type MerchKit, type MerchSale, type PaymentMethod } from '@/lib/merch'
+import { KIT_STATUS_LABELS, expectedTotal, kitLeft, saleTakings, type KitStatus, type MerchKit, type MerchSale, type PaymentMethod } from '@/lib/merch'
 import { approveMerchKit, closeMerchKit, deleteMerchKit, recordKitSale, reopenMerchKit, setMerchKitCrew, undoKitSale } from '@/actions/merch-kits'
 import { CrewPicker, type CrewPerson } from './CrewPicker'
+import { CloseKitSteps } from './CloseKitSteps'
 
 export interface KitLineView {
   variantId: string
@@ -126,7 +126,7 @@ export function KitView({ kit, show, lines, sales, people, userId, can, members,
               <th className="px-2 py-2 text-right font-bold">Sold</th>
               {status === 'open'
                 ? <th className="px-4 py-2 text-right font-bold">Left</th>
-                : <th className="px-4 py-2 text-right font-bold">Back</th>}
+                : <th className="px-4 py-2 text-right font-bold">Remaining</th>}
             </tr>
           </thead>
           <tbody>
@@ -212,10 +212,19 @@ export function KitView({ kit, show, lines, sales, people, userId, can, members,
         </div>
       )}
 
-      <Modal open={closing} onOpenChange={setClosing} title="Close the kit" description="Count what came back and the money you’re handing in." className="max-w-xl">
-        {closing && <CloseForm kitId={kit.id} lines={lines} tappedMoney={tapped.reduce((n, s) => n + saleTakings(s), 0)}
-          tappedBy={{ cash: tapped.reduce((n, s) => n + Number(s.cash_amount), 0), upi: tapped.reduce((n, s) => n + Number(s.upi_amount), 0), card: tapped.reduce((n, s) => n + Number(s.card_amount), 0) }}
-          onDone={() => setClosing(false)} />}
+      <Modal open={closing} onOpenChange={setClosing} title="End of night" className="max-w-md">
+        {closing && (
+          <CloseKitSteps
+            lines={lines}
+            tappedBy={{ cash: tapped.reduce((n, s) => n + Number(s.cash_amount), 0), upi: tapped.reduce((n, s) => n + Number(s.upi_amount), 0), card: tapped.reduce((n, s) => n + Number(s.card_amount), 0) }}
+            onCancel={() => setClosing(false)}
+            onClose={async (counts, paid, notes) => {
+              const ok = await run(() => closeMerchKit(kit.id, counts, paid, notes), 'Kit closed. It’s waiting for approval.')
+              if (ok) setClosing(false)
+              return ok
+            }}
+          />
+        )}
       </Modal>
       <Modal open={changingCrew} onOpenChange={setChangingCrew} title="Change the crew" description="Whoever you take off loses access to this kit straight away. Anyone new is told.">
         {changingCrew && <CrewForm kit={kit} people={crewPeople} onDone={() => setChangingCrew(false)} />}
@@ -311,113 +320,6 @@ function StallPanel({ kitId, lines }: { kitId: string; lines: KitLineView[] }) {
             {paid !== total && <p className="text-xs text-amber-600">{paid < total ? `${money(total - paid)} discount` : `${money(paid - total)} over the show price`}</p>}
           </div>
         )}
-      </div>
-    </div>
-  )
-}
-
-// ---- Closing the kit ----------------------------------------------------------------------------------------------------
-
-function CloseForm({ kitId, lines, tappedMoney, tappedBy, onDone }: { kitId: string; lines: KitLineView[]; tappedMoney: number; tappedBy: { cash: number; upi: number; card: number }; onDone: () => void }) {
-  const { money, symbol } = useMoney()
-  const run = useRun()
-  // Filled in from the stall: whatever wasn't sold came back, nothing given away or lost, and the money is what the
-  // stall recorded. Change anything that's different.
-  const [counts, setCounts] = useState<Record<string, { returned: string; given: string; lost: string }>>(() =>
-    Object.fromEntries(lines.map(l => [l.variantId, { returned: String(kitLeft(l.taken, l.sold)), given: '', lost: '' }])))
-  const amount = (n: number) => (n > 0 ? String(Math.round(n * 100) / 100) : '')
-  const [paid, setPaid] = useState({ cash: amount(tappedBy.cash), upi: amount(tappedBy.upi), card: amount(tappedBy.card) })
-  const [notes, setNotes] = useState('')
-  const [busy, setBusy] = useState(false)
-
-  const rows = lines.map(l => {
-    const c = counts[l.variantId] ?? { returned: '', given: '', lost: '' }
-    const n = (s: string) => Math.max(0, Math.trunc(Number(s || 0)))
-    const extra = closeoutSold(l.taken, l.sold, n(c.returned), n(c.given), n(c.lost))
-    return { l, c, extra, filled: c.returned !== '' }
-  })
-  const problems = rows.filter(r => r.extra < 0)
-  const missing = rows.filter(r => !r.filled)
-  const totalSold = rows.reduce((n, r) => n + r.l.sold + Math.max(0, r.extra), 0)
-  const shouldBe = expectedTotal(rows.map(r => ({ qty: r.l.sold + Math.max(0, r.extra), price: r.l.price })))
-  const handed = Number(paid.cash || 0) + Number(paid.upi || 0) + Number(paid.card || 0)
-  const set = (id: string, key: 'returned' | 'given' | 'lost', value: string) =>
-    setCounts(c => ({ ...c, [id]: { ...(c[id] ?? { returned: '', given: '', lost: '' }), [key]: value } }))
-  const cell = 'w-14 rounded-md border border-gray-300 bg-white px-1.5 py-1 text-right text-sm text-gray-900 focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-400'
-
-  const save = async () => {
-    setBusy(true)
-    const ok = await run(() => closeMerchKit(kitId, rows.map(r => ({ variantId: r.l.variantId, returned: Number(r.c.returned || 0), given: Number(r.c.given || 0), lost: Number(r.c.lost || 0) })),
-      { cash: Number(paid.cash || 0), upi: Number(paid.upi || 0), card: Number(paid.card || 0) }, notes), 'Kit closed. It’s waiting for approval.')
-    setBusy(false)
-    if (ok) onDone()
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="max-h-[45vh] overflow-y-auto rounded-xl border border-brand-100">
-        <table className="w-full text-sm">
-          <thead className="sticky top-0 bg-white">
-            <tr className="text-left text-[11px] font-bold uppercase tracking-wide text-gray-500">
-              <th className="px-3 py-2 font-bold">Item</th>
-              <th className="px-1 py-2 text-right font-bold">Back</th>
-              <th className="px-1 py-2 text-right font-bold">Given</th>
-              <th className="px-1 py-2 text-right font-bold">Lost</th>
-              <th className="px-3 py-2 text-right font-bold">Sold</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(r => (
-              <tr key={r.l.variantId} className="border-t border-brand-100">
-                <td className="px-3 py-1.5 text-gray-900">
-                  {r.l.itemName} · {r.l.label}
-                  <span className="block text-[11px] text-gray-500">{r.l.taken} went · {r.l.sold} tapped</span>
-                </td>
-                <td className="px-1 py-1.5 text-right"><input aria-label={`${r.l.itemName} ${r.l.label} came back`} type="number" inputMode="numeric" min={0} className={cell} value={r.c.returned} onChange={e => set(r.l.variantId, 'returned', e.target.value)} /></td>
-                <td className="px-1 py-1.5 text-right"><input aria-label={`${r.l.itemName} ${r.l.label} given away`} type="number" inputMode="numeric" min={0} className={cell} value={r.c.given} placeholder="0" onChange={e => set(r.l.variantId, 'given', e.target.value)} /></td>
-                <td className="px-1 py-1.5 text-right"><input aria-label={`${r.l.itemName} ${r.l.label} lost`} type="number" inputMode="numeric" min={0} className={cell} value={r.c.lost} placeholder="0" onChange={e => set(r.l.variantId, 'lost', e.target.value)} /></td>
-                <td className={cn('px-3 py-1.5 text-right font-semibold tabular-nums', r.extra < 0 ? 'text-red-700' : 'text-gray-900')}>
-                  {r.extra < 0 ? '!' : r.l.sold + r.extra}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="text-xs text-gray-500">Filled in from the stall’s sales: everything not sold is counted as back. Change any count that’s different. Anything that went out, wasn’t tapped, and didn’t come back, get given away or go missing counts as sold.</p>
-      {problems.length > 0 && <p className="text-sm text-red-700">More is counted than went out on {problems.length === 1 ? 'one item' : `${problems.length} items`}.</p>}
-
-      <div>
-        <SectionLabel className="mb-2">Money handed in (everything, including stall sales)</SectionLabel>
-        <div className="grid grid-cols-3 gap-3">
-          {METHODS.map(m => (
-            <div key={m.value} className="space-y-1.5">
-              <Label htmlFor={`close-${m.value}`}>{m.label} ({symbol})</Label>
-              <Input id={`close-${m.value}`} type="number" inputMode="decimal" min={0} step="0.01" value={paid[m.value]} placeholder="0" onChange={e => setPaid(p => ({ ...p, [m.value]: e.target.value }))} />
-            </div>
-          ))}
-        </div>
-        <p className="mt-1 text-xs text-gray-500">{tappedMoney > 0 ? `Filled in with the ${money(tappedMoney)} recorded at the stall. Change it to what you’re actually handing in.` : 'Enter what you’re handing in.'}</p>
-      </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="close-notes">Notes</Label>
-        <Input id="close-notes" value={notes} onChange={e => setNotes(e.target.value)} maxLength={2000} placeholder="Discounts, freebies, anything odd" />
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-brand-100 pt-3 text-sm">
-        <div>
-          <p className="text-gray-700">{totalSold} sold · should be <span className="font-semibold">{money(shouldBe)}</span></p>
-          <p className={cn('font-semibold', handed === shouldBe ? 'text-gray-900' : 'text-amber-600')}>
-            Handing in {money(handed)}{handed !== shouldBe && ` (${handed < shouldBe ? 'short' : 'over'} by ${money(Math.abs(handed - shouldBe))})`}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={onDone}>Cancel</Button>
-          <ReasonButton onClick={save} loading={busy}
-            blocked={missing.length ? `Enter how many came back for every item (${missing.length} still empty). Put 0 if none came back.` : problems.length ? 'Some counts add up to more than went out (marked !). Check Back, Given and Lost.' : null}>
-            Close kit
-          </ReasonButton>
-        </div>
       </div>
     </div>
   )
