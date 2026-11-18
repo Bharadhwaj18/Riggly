@@ -1,12 +1,15 @@
 'use client'
 
 import { useState } from 'react'
-import { ArrowLeft, Check, Minus, Plus } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { ArrowLeft, Check, Minus, Pencil, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
 import { SectionLabel } from '@/components/ui/SectionLabel'
 import { useMoney } from '@/components/finance/FinanceSettingsContext'
+import { useToast } from '@/components/ui/Toaster'
+import { updateKitSale } from '@/actions/merch-kits'
 import { cn } from '@/lib/utils'
 import { closeoutCounts, expectedTotal, kitLeft, type ShortReason } from '@/lib/merch'
 import type { KitLineView } from './KitView'
@@ -26,7 +29,7 @@ const METHODS = [
 type Paid = { cash: number; upi: number; card: number }
 
 export interface SaleItem { name: string; qty: number; price: number }
-export interface StallSale { id: string; at: string; items: SaleItem[]; method: string; amount: number }
+export interface StallSale { id: string; at: string; items: SaleItem[]; method: 'cash' | 'upi' | 'card'; amount: number }
 
 /**
  * End of night in three steps, each already answered from what the stall recorded:
@@ -34,7 +37,8 @@ export interface StallSale { id: string; at: string; items: SaleItem[]; method: 
  *   2. Money: does it match what those sales should bring in? Only if not, enter what you have.
  *   3. Check the summary and close.
  */
-export function CloseKitSteps({ lines, stallSales, tappedBy, onClose, onCancel }: {
+export function CloseKitSteps({ kitId, lines, stallSales, tappedBy, onClose, onCancel }: {
+  kitId: string
   lines: KitLineView[]
   /** Every sale tapped at the stall, oldest first in the table. */
   stallSales: StallSale[]
@@ -153,7 +157,7 @@ export function CloseKitSteps({ lines, stallSales, tappedBy, onClose, onCancel }
             <p className="text-sm text-gray-500">{soldTotal} sold should bring in</p>
             <p className="mt-2 text-3xl font-bold tabular-nums text-gray-900">{money(shouldBe)}</p>
           </div>
-          <SalesTable sales={stallSales} untapped={counts.flatMap(c => {
+          <SalesTable kitId={kitId} sales={stallSales} untapped={counts.flatMap(c => {
             const extra = c.soldTotal - (lines.find(l => l.variantId === c.variantId)?.sold ?? 0)
             const l = lines.find(x => x.variantId === c.variantId)!
             return extra > 0 ? [{ name: `${l.itemName} · ${l.label}`, qty: extra, price: c.price }] : []
@@ -170,7 +174,7 @@ export function CloseKitSteps({ lines, stallSales, tappedBy, onClose, onCancel }
                 <Button onClick={() => { setPaidText(null); setStep(3) }}><Check className="h-4 w-4" />Yes, it matches</Button>
                 <Button variant="secondary" onClick={() => { setPaidText({ cash: fmtAmt(suggested.cash), upi: fmtAmt(suggested.upi), card: fmtAmt(suggested.card) }); setMoneyDiffers(true) }}>No, enter what I have</Button>
               </div>
-              <p className="text-xs text-gray-500">UPI is usually exact, so most nights only cash needs counting.</p>
+              <p className="text-xs text-gray-500">Tap an amount in the table to correct a sale. UPI is usually exact, so most nights only cash needs counting.</p>
             </>
           ) : (
             <>
@@ -232,8 +236,25 @@ export function CloseKitSteps({ lines, stallSales, tappedBy, onClose, onCancel }
 }
 
 /** Every sale at the stall (time, what was bought, how it was paid, amount), plus anything sold but not tapped. */
-function SalesTable({ sales, untapped }: { sales: StallSale[]; untapped: SaleItem[] }) {
+function SalesTable({ kitId, sales, untapped }: { kitId: string; sales: StallSale[]; untapped: SaleItem[] }) {
   const { money } = useMoney()
+  const router = useRouter()
+  const toast = useToast()
+  const [editing, setEditing] = useState<{ id: string; amount: string; method: StallSale['method'] } | null>(null)
+  const [saving, setSaving] = useState(false)
+  const label = (m: StallSale['method']) => METHODS.find(x => x.value === m)?.label ?? m
+  const save = async () => {
+    if (!editing) return
+    const value = Number(editing.amount)
+    if (editing.amount === '' || !Number.isFinite(value) || value < 0) { toast('Enter an amount of 0 or more.', 'error'); return }
+    setSaving(true)
+    const res = await updateKitSale(editing.id, kitId, value, editing.method)
+    setSaving(false)
+    if (res.error) { toast(res.error, 'error'); return }
+    toast('Sale updated', 'success')
+    setEditing(null)
+    router.refresh()
+  }
   const describe = (items: SaleItem[]) => items.length ? items.map(i => (i.qty > 1 ? `${i.name} × ${i.qty}` : i.name)).join(', ') : 'No items'
   const ordered = [...sales].sort((a, b) => a.at.localeCompare(b.at))
   const untappedValue = untapped.reduce((n, i) => n + i.qty * i.price, 0)
@@ -260,8 +281,33 @@ function SalesTable({ sales, untapped }: { sales: StallSale[]; untapped: SaleIte
                   {describe(s.items)}
                   {Math.abs(list - s.amount) > 0.5 && <span className="block text-[11px] text-amber-600">{s.amount < list ? `${money(list - s.amount)} discount` : `${money(s.amount - list)} over list price`}</span>}
                 </td>
-                <td className="px-2 py-1.5 text-gray-600">{s.method}</td>
-                <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-gray-900">{money(s.amount)}</td>
+                {editing?.id === s.id ? (
+                  <td className="px-2 py-1.5" colSpan={2}>
+                    <div className="flex flex-wrap items-center justify-end gap-1.5">
+                      <select aria-label="Paid by" value={editing.method} onChange={e => setEditing({ ...editing, method: e.target.value as StallSale['method'] })}
+                        className="rounded-md border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-900">
+                        {METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                      </select>
+                      <input aria-label="Amount" type="number" inputMode="decimal" min={0} step="0.01" autoFocus value={editing.amount}
+                        onChange={e => setEditing({ ...editing, amount: e.target.value })}
+                        onKeyDown={e => { if (e.key === 'Enter') void save(); if (e.key === 'Escape') setEditing(null) }}
+                        className="w-20 rounded-md border border-gray-300 bg-white px-1.5 py-1 text-right text-sm text-gray-900 focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-400" />
+                      <button type="button" disabled={saving} onClick={() => void save()} className="rounded-md bg-brand-400 px-2 py-1 text-xs font-bold text-white disabled:opacity-60">Save</button>
+                      <button type="button" onClick={() => setEditing(null)} className="rounded-md px-1.5 py-1 text-xs text-gray-500 hover:text-gray-900">Cancel</button>
+                    </div>
+                  </td>
+                ) : (
+                  <>
+                    <td className="px-2 py-1.5 text-gray-600">{label(s.method)}</td>
+                    <td className="px-3 py-1.5 text-right">
+                      <button type="button" onClick={() => setEditing({ id: s.id, amount: String(Math.round(s.amount * 100) / 100), method: s.method })}
+                        aria-label={`Change this sale (${money(s.amount)})`} title="Change amount or how it was paid"
+                        className="inline-flex items-center gap-1 font-semibold tabular-nums text-gray-900 underline decoration-dotted underline-offset-4 hover:text-brand-400">
+                        {money(s.amount)}<Pencil className="h-3 w-3 text-gray-400" />
+                      </button>
+                    </td>
+                  </>
+                )}
               </tr>
             )
           })}

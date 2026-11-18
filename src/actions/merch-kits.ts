@@ -281,3 +281,15 @@ export async function approveMerchKit(kitId: string, to: { memberId?: string | n
   refresh(kitId, kit?.show_id)
   return { id: txId ?? undefined }
 }
+
+/** Corrects a stall sale's amount and how it was paid, while the kit is open. Items and stock stay as they are. */
+export async function updateKitSale(saleId: string, kitId: string, amount: number, method: 'cash' | 'upi' | 'card'): Promise<Result> {
+  const { supabase, user } = await signedIn()
+  if (!user) return { error: 'Not signed in' }
+  const value = Number(amount)
+  if (!Number.isFinite(value) || value < 0) return { error: 'Enter an amount of 0 or more.' }
+  const { error } = await supabase.rpc('update_kit_sale', { p_sale: saleId, p_amount: Math.round(value * 100) / 100, p_method: method })
+  if (error) return { error: friendly(error.message) }
+  refresh(kitId)
+  return {}
+}

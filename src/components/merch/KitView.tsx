@@ -217,12 +217,13 @@ export function KitView({ kit, show, lines, sales, saleItems, people, userId, ca
       <Modal open={closing} onOpenChange={setClosing} title="End of night" className="max-w-md">
         {closing && (
           <CloseKitSteps
+            kitId={kit.id}
             lines={lines}
             stallSales={tapped.map(s => ({
               id: s.id,
               at: s.created_at,
               items: saleItems[s.id] ?? [],
-              method: Number(s.cash_amount) ? 'Cash' : Number(s.upi_amount) ? 'UPI' : Number(s.card_amount) ? 'Card' : 'Free',
+              method: Number(s.upi_amount) ? 'upi' : Number(s.card_amount) ? 'card' : 'cash',
               amount: saleTakings(s),
             }))}
             tappedBy={{ cash: tapped.reduce((n, s) => n + Number(s.cash_amount), 0), upi: tapped.reduce((n, s) => n + Number(s.upi_amount), 0), card: tapped.reduce((n, s) => n + Number(s.card_amount), 0) }}
