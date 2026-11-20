@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react'
 import { APP_NAME } from '@/lib/brand'
 import { WifiOff, CloudOff, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
-import { parseSong } from '@/lib/chords/parser'
-import { formatSong, getCss } from '@/lib/chords/formatter'
+import { getCss } from '@/lib/chords/formatter'
+import { renderChartHtml } from '@/lib/chords/render'
 import { saveSetlistOffline, removeSetlistOffline, isSetlistSavedOffline } from '@/lib/offline'
 import { useToast } from '@/components/ui/Toaster'
 import type { Song } from '@/types'
@@ -59,7 +59,7 @@ function buildOfflineHtml(
     }
     let chordHtml = ''
     if (song.chord_chart) {
-      try { chordHtml = formatSong(parseSong(song.chord_chart)) } catch { chordHtml = `<pre class="raw-chart">${escapeHtml(song.chord_chart)}</pre>` }
+      try { chordHtml = renderChartHtml(song.chord_chart) } catch { chordHtml = `<pre class="raw-chart">${escapeHtml(song.chord_chart)}</pre>` }
     }
     const meta: string[] = []
     if (song.song_key) meta.push(`Key: <strong>${escapeHtml(song.song_key)}</strong>`)

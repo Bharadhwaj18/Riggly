@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { requireWorkspaceId } from '@/lib/workspace'
-import type { SongFormData } from '@/lib/validators'
+import { songDetailsSchema, type SongFormData, type SongDetailsData } from '@/lib/validators'
 import { addSongReference } from '@/actions/song-references'
 
 /** Just the song's own columns from the form (the link and cover are handled separately). */
@@ -77,6 +77,50 @@ export async function saveTranspose(
     .eq('id', songId)
 
   if (error) return { error: error.message }
+
+  revalidatePath('/songs')
+  revalidatePath(`/songs/${songId}`)
+  return {}
+}
+
+/** Saves the song's details (name, key, tempo…), for the unlocked song page (auto-saved as you type). */
+export async function saveSongDetails(songId: string, details: SongDetailsData): Promise<{ error?: string }> {
+  const parsed = songDetailsSchema.safeParse(details)
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Those details aren’t valid.' }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const { data, error } = await supabase
+    .from('songs')
+    .update({ ...parsed.data, updated_by: user.id })
+    .eq('id', songId)
+    .select('id')
+
+  if (error) return { error: error.message }
+  if (!data?.length) return { error: 'You can’t edit this song.' }
+
+  revalidatePath('/songs')
+  revalidatePath(`/songs/${songId}`)
+  return {}
+}
+
+/** Saves just the chord chart, for the song page's unlocked block editor (auto-saved as you type). */
+export async function saveChordChart(songId: string, chordChart: string): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const { data, error } = await supabase
+    .from('songs')
+    .update({ chord_chart: chordChart, updated_by: user.id })
+    .eq('id', songId)
+    .select('id')
+
+  if (error) return { error: error.message }
+  // Row-level security turns a change you aren't allowed to make into "nothing updated", not an error.
+  if (!data?.length) return { error: 'You can’t edit this song.' }
 
   revalidatePath('/songs')
   revalidatePath(`/songs/${songId}`)

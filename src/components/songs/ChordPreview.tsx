@@ -1,14 +1,13 @@
 'use client'
 
 import { useEffect, useMemo } from 'react'
-import { parseSong } from '@/lib/chords/parser'
-import { formatSong } from '@/lib/chords/formatter'
+import { renderChartHtml } from '@/lib/chords/render'
 import { ensureChordSheetCss } from './chordSheetStyles'
 
 /** Read-only rendering of a chord chart as it will look on the song page. */
 export function ChordPreview({ chart }: { chart: string }) {
   useEffect(() => { ensureChordSheetCss() }, [])
-  const html = useMemo(() => (chart.trim() ? formatSong(parseSong(chart)) : ''), [chart])
+  const html = useMemo(() => (chart.trim() ? renderChartHtml(chart) : ''), [chart])
 
   return (
     <div className="flex h-full min-h-48 flex-col overflow-hidden rounded-xl border border-brand-200 bg-white">

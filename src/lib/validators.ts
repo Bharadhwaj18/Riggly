@@ -29,6 +29,17 @@ export const songSchema = z.object({
   cover_url: z.string().max(1000).optional(),
 })
 
+/** The song details edited in place on an unlocked song page. */
+export const songDetailsSchema = z.object({
+  title: z.string().trim().min(1, 'The song needs a name').max(200),
+  artist: z.string().max(200),
+  song_key: z.string().max(10),
+  bpm: z.number().int().min(20, 'Tempo is too slow (20 BPM at least)').max(280, 'Tempo is too fast (280 BPM at most)').nullable(),
+  time_signature: z.string().max(10),
+  notes: z.string().max(5000),
+})
+export type SongDetailsData = z.infer<typeof songDetailsSchema>
+
 export const setlistSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   show_date: z.string().optional(),

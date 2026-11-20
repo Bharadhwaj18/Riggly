@@ -11,9 +11,10 @@ import { useFullscreen } from '@/hooks/useFullscreen'
 import { useAutoScroll } from '@/hooks/useAutoScroll'
 import { useSwipe } from '@/lib/use-swipe'
 import { parseSong } from '@/lib/chords/parser'
-import { formatSong, formatSongAsChordPro } from '@/lib/chords/formatter'
+import { formatSongAsChordPro } from '@/lib/chords/formatter'
 import { transposeSong, transposeKey } from '@/lib/chords/transposer'
 import { getStageChordSheetCss } from '@/lib/chords/theme'
+import { renderChartHtml } from '@/lib/chords/render'
 import { ensureChordSheetCss } from './chordSheetStyles'
 import { saveTranspose } from '@/actions/songs'
 import { reorderSetlistSongs } from '@/actions/setlists'
@@ -106,10 +107,7 @@ export function StageMode({ songs: initialSongs, startSongId, setlistId, setlist
   const prev = idx > 0 ? songs[idx - 1] : null
   const next = idx < total - 1 ? songs[idx + 1] : null
   const currentKey = semitones === 0 ? song.song_key : transposeKey(song.song_key, semitones)
-  const html = useMemo(() => {
-    const parsed = parseSong(song.chord_chart)
-    return formatSong(semitones === 0 ? parsed : transposeSong(parsed, semitones))
-  }, [song.chord_chart, semitones])
+  const html = useMemo(() => renderChartHtml(song.chord_chart, semitones), [song.chord_chart, semitones])
 
   // Mount: portal target, fullscreen, keep the screen awake.
   useEffect(() => {
