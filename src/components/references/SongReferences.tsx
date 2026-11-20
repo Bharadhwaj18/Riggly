@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { ExternalLink, MoreVertical, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ChevronDown, ExternalLink, MoreVertical, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useToast } from '@/components/ui/Toaster'
 import { cn } from '@/lib/utils'
 import { deleteSongReference, updateSongReference } from '@/actions/song-references'
@@ -23,37 +23,57 @@ interface Props {
 /** A song's references: each one plays right here, and its moments jump straight to that point. */
 export function SongReferences({ songId, references, canEdit, searchSources }: Props) {
   const [sheet, setSheet] = useState<{ editing: PlayableReference | null } | null>(null)
+  // Collapsed by default so the chart comes first. Once opened, the players stay mounted (just hidden)
+  // so something playing keeps playing when the list is folded away again.
+  const [open, setOpen] = useState(false)
+  const [everOpened, setEverOpened] = useState(false)
+  const toggle = () => { setOpen(o => !o); setEverOpened(true) }
+  const sources = [...new Set(references.map(r => r.source))]
 
   return (
     <section aria-labelledby="refs-heading" className="space-y-3">
-      <div className="flex items-center justify-between px-1">
-        <h2 id="refs-heading" className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-gray-500">
-          References{references.length > 0 && ` · ${references.length}`}
-        </h2>
-        {canEdit && references.length > 0 && (
+      <div className="flex items-center gap-1 rounded-2xl border border-brand-200 bg-white pr-1">
+        <button type="button" onClick={toggle} aria-expanded={open} aria-controls="refs-list"
+          className="flex min-h-12 min-w-0 flex-1 items-center gap-2 px-3 text-left">
+          <h2 id="refs-heading" className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-gray-500">
+            References{references.length > 0 ? ` · ${references.length}` : ''}
+          </h2>
+          {sources.length > 0 && (
+            <span className="flex items-center gap-1" aria-hidden>
+              {sources.map(src => <ServiceMark key={src} source={src} size={14} />)}
+            </span>
+          )}
+          {references.length === 0 && <span className="truncate text-xs font-semibold text-gray-400">None yet</span>}
+          <ChevronDown className={cn('ml-auto h-4 w-4 shrink-0 text-gray-400 transition-transform', open && 'rotate-180')} />
+        </button>
+        {canEdit && (
           <button type="button" onClick={() => setSheet({ editing: null })}
-            className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-sm font-extrabold text-brand-700 hover:bg-brand-50">
+            className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-lg px-2 text-sm font-extrabold text-brand-700 hover:bg-brand-50">
             <Plus className="h-4 w-4" />Add
           </button>
         )}
       </div>
 
-      {references.length === 0 ? (
-        <div className="rounded-2xl border-2 border-dashed border-brand-200 p-4 text-center">
-          <p className="text-sm text-gray-600">Link the version you play from Spotify or YouTube, so everyone hears the same thing.</p>
-          {canEdit && (
-            <button type="button" onClick={() => setSheet({ editing: null })}
-              className="mt-3 inline-flex min-h-10 items-center gap-1.5 rounded-xl bg-brand-600 px-4 text-sm font-extrabold text-white hover:bg-brand-700">
-              <Plus className="h-4 w-4" />Add a reference
-            </button>
+      {everOpened && (
+        <div id="refs-list" hidden={!open} className="space-y-3">
+          {references.length === 0 ? (
+            <div className="rounded-2xl border-2 border-dashed border-brand-200 p-4 text-center">
+              <p className="text-sm text-gray-600">Link the version you play from Spotify or YouTube, so everyone hears the same thing.</p>
+              {canEdit && (
+                <button type="button" onClick={() => setSheet({ editing: null })}
+                  className="mt-3 inline-flex min-h-10 items-center gap-1.5 rounded-xl bg-brand-600 px-4 text-sm font-extrabold text-white hover:bg-brand-700">
+                  <Plus className="h-4 w-4" />Add a reference
+                </button>
+              )}
+            </div>
+          ) : (
+            references.map(r => (
+              canPlayInApp(r.source)
+                ? <ReferenceCard key={r.id} reference={r} canEdit={canEdit} onEdit={() => setSheet({ editing: r })} />
+                : <OpenOutRow key={r.id} reference={r} canEdit={canEdit} onEdit={() => setSheet({ editing: r })} />
+            ))
           )}
         </div>
-      ) : (
-        references.map(r => (
-          canPlayInApp(r.source)
-            ? <ReferenceCard key={r.id} reference={r} canEdit={canEdit} onEdit={() => setSheet({ editing: r })} />
-            : <OpenOutRow key={r.id} reference={r} canEdit={canEdit} onEdit={() => setSheet({ editing: r })} />
-        ))
       )}
 
       <ReferenceSheet songId={songId} open={!!sheet} onOpenChange={o => { if (!o) setSheet(null) }} editing={sheet?.editing} searchSources={searchSources} />
