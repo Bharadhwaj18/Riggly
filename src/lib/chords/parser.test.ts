@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { parseSong } from './parser'
-import { formatSong } from './formatter'
+import { formatSong, formatSongAsChordPro } from './formatter'
 
 describe('parseSong', () => {
   it('parses a basic ChordPro chart into chords and lyrics', () => {
@@ -43,7 +43,13 @@ describe('parseSong', () => {
       // The historical bug dropped everything from the bare "#" onward,
       // losing both "here" and the D# chord entirely.
       expect(html).toContain('here')
-      expect(html).toContain('D♯')
+      expect(html).toContain('>D#<')
+    })
+
+    it('transposes sharp and flat chords, including ones saved with ♯ and ♭', () => {
+      const out = formatSongAsChordPro(parseSong('{key: F#}\n[A#m]Verse #1 [C♯]x [B♭]y').transpose(2))
+      expect(out).toContain('[Cm]Verse ♯1 [D#]x [C]y')
+      expect(out).toContain('{key: G#}')
     })
   })
 })
