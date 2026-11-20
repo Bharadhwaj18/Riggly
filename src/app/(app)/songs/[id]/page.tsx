@@ -14,11 +14,12 @@ import { ServiceMark } from '@/components/references/ServiceMark'
 import { availableSearchSources } from '@/lib/reference-lookup'
 import { SOURCE_NAMES } from '@/lib/song-references'
 import { ChordViewer } from '@/components/songs/ChordViewer'
+import { SongEditProvider, LockToggle } from '@/components/songs/SongEditContext'
+import { SongDetails, SongNotesCard } from '@/components/songs/SongDetails'
 import { ActiveSetlistSync } from '@/components/setlists/ActiveSetlistSync'
 import { RecordingsList } from '@/components/recordings/RecordingsList'
 import { Button } from '@/components/ui/Button'
 import { SectionLabel } from '@/components/ui/SectionLabel'
-import { StatusPill } from '@/components/ui/StatusPill'
 import { SongPdfExport } from '@/components/pdf/SongPdfExport'
 import { ACTIVE_SETLIST_COOKIE } from '@/lib/setlist-context'
 import type { RecordingWithSong } from '@/types'
@@ -106,31 +107,37 @@ export default async function SongPage({ params, searchParams }: Props) {
         </Link>
       )}
 
-      {/* Header */}
-      <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-4">
-          {song.cover_url && <Cover url={song.cover_url} title={song.title} size={72} />}
-          <div className="min-w-0">
-          <h1 className="text-3xl font-bold text-gray-900">{song.title}</h1>
-          {song.artist && <p className="mt-0.5 text-gray-500">{song.artist}</p>}
-          {coverFrom && (
-            <a href={coverFrom.url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-gray-500 hover:text-gray-800">
-              <ServiceMark source={coverFrom.source} size={12} />Cover from {SOURCE_NAMES[coverFrom.source]}
-            </a>
-          )}
-          <div className="mt-3 flex flex-wrap gap-2">
-            {song.song_key && (
-              <span className="inline-flex items-center rounded-full bg-hero px-3 py-1 text-xs font-bold text-hero-fg">Key of {song.song_key}</span>
-            )}
-            {song.bpm && <StatusPill className="px-3 py-1 text-xs">{song.bpm} BPM</StatusPill>}
-            {song.time_signature && <StatusPill className="px-3 py-1 text-xs">{song.time_signature}</StatusPill>}
-          </div>
-          </div>
+      <SongEditProvider
+        songId={id}
+        canEdit={canEditSongs}
+        initial={{
+          title: song.title,
+          artist: song.artist ?? '',
+          song_key: song.song_key ?? '',
+          bpm: song.bpm ?? null,
+          time_signature: song.time_signature ?? '',
+          notes: song.notes ?? '',
+        }}
+      >
+      {/* Header: the details become fields when the song is unlocked. */}
+      {/* Phone: the details take the full width, with the buttons under them. */}
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+        <div className="min-w-0 sm:flex-1">
+          <SongDetails
+            cover={song.cover_url ? <Cover url={song.cover_url} title={song.title} size={72} /> : undefined}
+            coverLink={coverFrom ? (
+              <a href={coverFrom.url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-gray-500 hover:text-gray-800">
+                <ServiceMark source={coverFrom.source} size={12} />Cover from {SOURCE_NAMES[coverFrom.source]}
+              </a>
+            ) : undefined}
+          />
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
+          {/* On a phone the lock sits on the chart bar just below, so it isn't shown twice. */}
+          <LockToggle showStatus={false} className="hidden sm:flex" />
           <SongPdfExport song={song} />
           <Button variant="secondary" size="sm" asChild>
-            <Link href={editHref}><Pencil className="h-4 w-4" /> Edit</Link>
+            <Link href={editHref}><Pencil className="h-4 w-4" /> Edit details</Link>
           </Button>
         </div>
       </div>
@@ -172,12 +179,7 @@ export default async function SongPage({ params, searchParams }: Props) {
 
         <aside className="contents lg:block lg:space-y-4">
           <div className="order-first lg:order-none"><SongReferences songId={id} references={references} canEdit={canEditSongs} searchSources={availableSearchSources()} /></div>
-          {song.notes && (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-              <SectionLabel className="mb-1.5 text-amber-700">Band notes</SectionLabel>
-              <p className="whitespace-pre-wrap">{song.notes}</p>
-            </div>
-          )}
+          <SongNotesCard />
 
           <div className="mb-6"><LinkedNotes songId={id} /></div>
 
@@ -199,6 +201,7 @@ export default async function SongPage({ params, searchParams }: Props) {
           </p>
         </aside>
       </div>
+      </SongEditProvider>
     </div>
   )
 }

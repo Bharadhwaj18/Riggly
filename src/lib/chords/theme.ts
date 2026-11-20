@@ -40,6 +40,13 @@ export function buildChordSheetCss(config: ChordSheetThemeConfig): string {
   rules.push(`${p}.row { display: flex; flex-wrap: wrap; }`)
   rules.push(`${p}.column { display: flex; flex-direction: column; margin-right: ${config.columnGap}; }`)
   rules.push(`${p}.comment { color: ${config.commentColor}; font-style: italic;${config.commentMarginBottom ? ` margin-bottom: ${config.commentMarginBottom};` : ''} }`)
+  // Lines written as a label and chords ("VERSE - F# E C#"), shown as typed with the chords inline.
+  rules.push(`${p}.inline-line { white-space: pre-wrap; margin-bottom: 0.35em; }`)
+  rules.push(`${p}.ichord { color: ${config.chordColor}; font-weight: 700;${config.chordFontSize ? ` font-size: ${config.chordFontSize}px;` : ''} }`)
+  rules.push(`${p}.line-gap { height: 1em; }`)
+  rules.push(`${p}.chart-section { margin-bottom: ${config.paragraphMarginBottom}; }`)
+  // Highlighted text keeps dark lettering, so it stays readable on a dark stage or in dark mode.
+  rules.push(`${p}.chord-sheet span[style*="background-color"] { color: #111; border-radius: 3px; padding: 0 1px; }`)
   rules.push(`${p}.section-label { font-weight: ${config.sectionLabel.fontWeight}; color: ${config.sectionLabel.color}; text-transform: uppercase; font-size: 0.75rem; letter-spacing: ${config.sectionLabel.letterSpacing}; margin-bottom: ${config.sectionLabel.marginBottom}; }`)
 
   return rules.join('\n')

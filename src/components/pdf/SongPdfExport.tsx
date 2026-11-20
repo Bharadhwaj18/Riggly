@@ -3,8 +3,8 @@
 import { useState } from 'react'
 import { FileDown } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
-import { parseSong } from '@/lib/chords/parser'
-import { formatSong, getCss } from '@/lib/chords/formatter'
+import { getCss } from '@/lib/chords/formatter'
+import { renderChartHtml } from '@/lib/chords/render'
 import { getPrintChordSheetCss } from '@/lib/chords/theme'
 import { useToast } from '@/components/ui/Toaster'
 import type { Song } from '@/types'
@@ -17,7 +17,7 @@ function buildSongPrintHtml(song: Song): string {
   let chordHtml = ''
   if (song.chord_chart) {
     try {
-      chordHtml = formatSong(parseSong(song.chord_chart))
+      chordHtml = renderChartHtml(song.chord_chart)
     } catch {
       chordHtml = `<pre style="white-space:pre-wrap">${escapeHtml(song.chord_chart)}</pre>`
     }
