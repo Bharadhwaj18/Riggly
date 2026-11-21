@@ -19,6 +19,8 @@ import { KIT_STATUS_LABELS, expectedTotal, kitLeft, saleTakings, type KitStatus,
 import { approveMerchKit, closeMerchKit, deleteMerchKit, recordKitSale, reopenMerchKit, setMerchKitCrew, undoKitSale } from '@/actions/merch-kits'
 import { CrewPicker, type CrewPerson } from './CrewPicker'
 import { CloseKitSteps, type SaleItem } from './CloseKitSteps'
+import { AmountField } from './AmountField'
+import { ReasonButton } from '@/components/ui/ReasonButton'
 
 export interface KitLineView {
   variantId: string
@@ -343,22 +345,23 @@ function ApproveForm({ kit, total, members, accounts, onDone }: { kit: MerchKit;
   // Starts on the stall lead if they can hold the band's money (Merch crew can't: they're not in this list).
   const start = kit.lead_id && members.some(m => m.id === kit.lead_id) ? `m:${kit.lead_id}` : members[0] ? `m:${members[0].id}` : ''
   const [to, setTo] = useState(start)
+  const [amount, setAmount] = useState(String(Math.round(total * 100) / 100))
   const [busy, setBusy] = useState(false)
+  const value = Number(amount)
+  const valid = amount.trim() !== '' && Number.isFinite(value) && value >= 0
 
   const approve = async () => {
+    if (!valid) return
     setBusy(true)
-    const ok = await run(() => approveMerchKit(kit.id, to.startsWith('a:') ? { accountId: to.slice(2) } : { memberId: to.slice(2) }), total > 0 ? `${money(total)} added to Finance` : 'Kit approved')
+    const ok = await run(() => approveMerchKit(kit.id, to.startsWith('a:') ? { accountId: to.slice(2) } : { memberId: to.slice(2) }, value), value > 0 ? `${money(value)} added to Finance` : 'Kit approved')
     setBusy(false)
     if (ok) onDone()
   }
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl bg-brand-50 px-4 py-3">
-        <p className="text-sm text-gray-600">Money handed in</p>
-        <p className="text-2xl font-bold tabular-nums text-gray-900">{money(total)}</p>
-      </div>
-      {total > 0 && (
+      <AmountField id="kit-approve-amount" label="Amount going into Finance" amount={amount} setAmount={setAmount} recorded={total} recordedLabel="handed in" />
+      {value > 0 && (
         <div className="space-y-1.5">
           <Label htmlFor="kit-approve-to">Who has the money</Label>
           <Select id="kit-approve-to" value={to} onChange={e => setTo(e.target.value)}>
@@ -369,7 +372,7 @@ function ApproveForm({ kit, total, members, accounts, onDone }: { kit: MerchKit;
       )}
       <div className="flex justify-end gap-2">
         <Button variant="secondary" onClick={onDone}>Cancel</Button>
-        <Button onClick={approve} loading={busy}>Approve</Button>
+        <ReasonButton onClick={approve} loading={busy} blocked={valid ? null : 'Enter an amount of 0 or more.'}>Approve</ReasonButton>
       </div>
     </div>
   )

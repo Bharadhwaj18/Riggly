@@ -1646,6 +1646,7 @@ export type Database = {
       }
       merch_sales: {
         Row: {
+          approved_amount: number | null
           kit_id: string | null
           id: string
           workspace_id: string
@@ -1666,6 +1667,7 @@ export type Database = {
           approved_at: string | null
         }
         Insert: {
+          approved_amount?: number | null
           kit_id?: string | null
           id?: string
           workspace_id: string
@@ -1686,6 +1688,7 @@ export type Database = {
           approved_at?: string | null
         }
         Update: {
+          approved_amount?: number | null
           kit_id?: string | null
           id?: string
           workspace_id?: string
@@ -1795,6 +1798,7 @@ export type Database = {
       }
       merch_kits: {
         Row: {
+          approved_amount: number | null
           id: string
           workspace_id: string
           show_id: string | null
@@ -1815,6 +1819,7 @@ export type Database = {
           created_at: string
         }
         Insert: {
+          approved_amount?: number | null
           id?: string
           workspace_id: string
           show_id?: string | null
@@ -1835,6 +1840,7 @@ export type Database = {
           created_at?: string
         }
         Update: {
+          approved_amount?: number | null
           id?: string
           workspace_id?: string
           show_id?: string | null
@@ -1921,7 +1927,7 @@ export type Database = {
         Returns: boolean
       }
       approve_merch_kit: {
-        Args: { p_kit: string; p_member?: string | null; p_account?: string | null }
+        Args: { p_kit: string; p_member?: string | null; p_account?: string | null; p_amount?: number | null }
         Returns: string | null
       }
       close_merch_kit: {
@@ -1949,7 +1955,7 @@ export type Database = {
         Returns: undefined
       }
       approve_merch_sales: {
-        Args: { p_ids: string[]; p_member?: string | null; p_account?: string | null }
+        Args: { p_ids: string[]; p_member?: string | null; p_account?: string | null; p_amount?: number | null }
         Returns: string | null
       }
       merch_approver: {

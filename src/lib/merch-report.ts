@@ -1,8 +1,8 @@
 // Merch reports: what sold, what it brought in, what it cost and what was left over, per show and per item,
 // for a period. Kept free of the database so it can be tested on its own.
 //
-// - Money taken is what was actually collected. For a closed or approved kit that's the money handed in at the
-//   end of the night; otherwise it's the sales recorded.
+// - Money taken is what was actually collected: once approved, the amount that went into Finance (the approver can
+//   change it); before that, the money handed in for a closed kit, or the sales recorded.
 // - List value is units sold at their prices; the gap to money taken is discounts (or a shortfall).
 // - Cost of goods uses each size's average cost across restocks. Sizes with no recorded cost count as zero and
 //   are flagged, so the profit isn't silently overstated.
@@ -44,8 +44,8 @@ export interface MerchReport {
 
 type ShowRef = { id: string; title: string; show_date: string | null } | null
 type MoveIn = Pick<MerchMove, 'variant_id' | 'qty' | 'reason' | 'unit_cost' | 'unit_price' | 'show_id' | 'kit_id' | 'date'> & { show?: ShowRef }
-type SaleIn = Pick<MerchSale, 'id' | 'show_id' | 'kit_id' | 'date' | 'status' | 'cash_amount' | 'upi_amount' | 'card_amount'> & { show?: ShowRef }
-type KitIn = Pick<MerchKit, 'id' | 'show_id' | 'status' | 'cash_in' | 'upi_in' | 'card_in'>
+type SaleIn = Pick<MerchSale, 'id' | 'show_id' | 'kit_id' | 'date' | 'status' | 'cash_amount' | 'upi_amount' | 'card_amount'> & { show?: ShowRef; approved_amount?: number | null }
+type KitIn = Pick<MerchKit, 'id' | 'show_id' | 'status' | 'cash_in' | 'upi_in' | 'card_in'> & { approved_amount?: number | null }
 
 const blank = (key: string, label: string, date?: string | null): ReportRow =>
   ({ key, label, date, sold: 0, given: 0, lost: 0, listValue: 0, taken: 0, cost: 0, writeOff: 0, profit: 0, costMissing: false, pending: 0 })
@@ -115,12 +115,16 @@ export function buildMerchReport(input: {
     if (kit && kit.status !== 'open') {
       if (countedKits.has(kit.id)) continue
       countedKits.add(kit.id)
-      const handed = Number(kit.cash_in ?? 0) + Number(kit.upi_in ?? 0) + Number(kit.card_in ?? 0)
+      // Once approved, what went into Finance (the approver may have changed it); before that, what was handed in.
+      const handed = kit.status === 'approved' && kit.approved_amount != null
+        ? Number(kit.approved_amount)
+        : Number(kit.cash_in ?? 0) + Number(kit.upi_in ?? 0) + Number(kit.card_in ?? 0)
       row.taken += handed
       if (kit.status !== 'approved') row.pending! += handed
     } else {
-      row.taken += saleTakings(s)
-      if (s.status !== 'approved') row.pending! += saleTakings(s)
+      const amount = s.status === 'approved' && s.approved_amount != null ? Number(s.approved_amount) : saleTakings(s)
+      row.taken += amount
+      if (s.status !== 'approved') row.pending! += amount
     }
   }
 
