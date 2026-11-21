@@ -1,8 +1,8 @@
 'use client'
 
-import { useMemo, useRef, useState, type ReactNode, type TouchEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent } from 'react'
 import { addMonths, subMonths, format } from 'date-fns'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight } from 'lucide-react'
 import { buildMonthGrid, groupItemsByDate, externalLabel, type DayItems, type ExternalItem } from '@/lib/calendar'
 import { parseISODate } from '@/lib/dates'
 import { cn } from '@/lib/utils'
@@ -39,6 +39,7 @@ interface Props {
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const KINDS: CalendarKind[] = ['show', 'task', 'off', 'event', 'else']
 const MAX_PILLS = 2
+const HIDDEN_KINDS_KEY = 'rigly.calendar.hiddenKinds'
 
 interface DayPill { key: string; kind: CalendarKind; label: string; done?: boolean }
 
@@ -54,8 +55,33 @@ export function CalendarMonthView({
   const [currentMonth, setCurrentMonth] = useState(() => parseISODate(today))
   const [selectedDate, setSelectedDate] = useState(today)
 
+  // Kinds this person has switched off, saved per device; read after the first render so server and browser agree.
+  const [hiddenKinds, setHiddenKinds] = useState<CalendarKind[]>([])
+  useEffect(() => {
+    try {
+      const saved: unknown = JSON.parse(localStorage.getItem(HIDDEN_KINDS_KEY) ?? '[]')
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (Array.isArray(saved)) setHiddenKinds(saved.filter((k): k is CalendarKind => KINDS.includes(k)))
+    } catch { /* private mode */ }
+  }, [])
+  const saveHidden = (next: CalendarKind[]) => {
+    setHiddenKinds(next)
+    try { localStorage.setItem(HIDDEN_KINDS_KEY, JSON.stringify(next)) } catch { /* private mode */ }
+  }
+  const toggleKind = (k: CalendarKind) => saveHidden(hiddenKinds.includes(k) ? hiddenKinds.filter(x => x !== k) : [...hiddenKinds, k])
+  const isOn = (k: CalendarKind) => !hiddenKinds.includes(k)
+  // Only offer kinds that can show up here.
+  const kinds = KINDS.filter(k => k === 'else' ? external.length > 0 : k === 'off' ? !readOnly || unavailability.length > 0 : true)
+
   const weeks = useMemo(() => buildMonthGrid(currentMonth), [currentMonth])
-  const byDate = useMemo(() => groupItemsByDate(shows, tasks, unavailability, events, external), [shows, tasks, unavailability, events, external])
+  const allByDate = useMemo(() => groupItemsByDate(shows, tasks, unavailability, events, external), [shows, tasks, unavailability, events, external])
+  const byDate = useMemo(() => groupItemsByDate(
+    hiddenKinds.includes('show') ? [] : shows,
+    hiddenKinds.includes('task') ? [] : tasks,
+    hiddenKinds.includes('off') ? [] : unavailability,
+    hiddenKinds.includes('event') ? [] : events,
+    hiddenKinds.includes('else') ? [] : external,
+  ), [shows, tasks, unavailability, events, external, hiddenKinds])
 
   const pillsFor = (items: DayItems): DayPill[] => {
     const pills: DayPill[] = []
@@ -139,6 +165,9 @@ export function CalendarMonthView({
   }
 
   const selectedItems = byDate[selectedDate] ?? EMPTY_DAY
+  const countOf = (d: DayItems | undefined) => d ? d.shows.length + d.tasks.length + d.unavailability.length + d.events.length + d.external.length : 0
+  // What the filters are hiding on the picked day, so switching a kind off never hides a clash without saying so.
+  const hiddenOnDay = countOf(allByDate[selectedDate]) - countOf(byDate[selectedDate])
   const detailProps = { date: selectedDate, items: selectedItems, readOnly, workspaceNameById, members, boards, nameById }
 
   return (
@@ -159,12 +188,34 @@ export function CalendarMonthView({
       </div>
       {note && <p className="mb-3 text-sm text-gray-500">{note}</p>}
 
-      {/* Legend (desktop) */}
-      <div className="mb-3 hidden flex-wrap gap-1.5 md:flex">
-        {KINDS.map(k => (
-          <span key={k} className={cn('rounded-full px-2.5 py-0.5 text-[11px] font-extrabold', KIND_PILL[k])}>{KIND_LABEL[k]}</span>
+      {/* What to show: tap a kind to switch it off or on. Doubles as the colour key. */}
+      <div role="group" aria-label="What to show" className="-mx-4 mb-3 flex items-center gap-1.5 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-wrap md:overflow-visible md:px-0 md:pb-0">
+        {kinds.map(k => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => toggleKind(k)}
+            aria-pressed={isOn(k)}
+            title={isOn(k) ? `Hide ${KIND_LABEL[k].toLowerCase()}` : `Show ${KIND_LABEL[k].toLowerCase()}`}
+            className={cn(
+              'inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-xs font-extrabold transition-opacity md:px-2.5 md:py-0.5 md:text-[11px]',
+              isOn(k) ? KIND_PILL[k] : 'border border-dashed border-gray-300 bg-transparent text-gray-400 line-through opacity-70'
+            )}
+          >
+            {isOn(k) && <Check className="h-3 w-3" strokeWidth={3} />}
+            {KIND_LABEL[k]}
+          </button>
         ))}
+        {hiddenKinds.length > 0 && (
+          <button type="button" onClick={() => saveHidden([])} className="shrink-0 px-1.5 text-xs font-bold text-brand-600 underline md:text-[11px]">Show all</button>
+        )}
       </div>
+      {hiddenOnDay > 0 && (
+        <p className="mb-3 text-xs font-semibold text-amber-700">
+          {hiddenOnDay} {hiddenOnDay === 1 ? 'thing is' : 'things are'} hidden on {parseISODate(selectedDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}.{' '}
+          <button type="button" onClick={() => saveHidden([])} className="font-bold underline">Show all</button>
+        </p>
+      )}
 
       <div className="flex flex-col gap-4 md:flex-row md:items-start">
         {/* Desktop month: pills inside each day */}

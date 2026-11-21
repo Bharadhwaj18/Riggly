@@ -23,7 +23,8 @@ function shortDate(dateStr: string) {
   return new Intl.DateTimeFormat('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(dateStr + 'T00:00:00Z'))
 }
 
-function headline(days: number) {
+function headline(days: number, event?: string) {
+  if (event) return days <= 0 ? `${event} is today` : days === 1 ? `${event} is tomorrow` : `${event} in ${days} days`
   if (days === 0) return "Showtime is today"
   if (days === 1) return "Showtime is tomorrow"
   if (days < 0) return "Show has passed"
@@ -71,16 +72,22 @@ export default async function TodayPage() {
   const upcoming = shows
     .filter(s => s.show_date && s.show_date >= today)
     .sort((a, b) => a.show_date!.localeCompare(b.show_date!))
-  const next = upcoming[0]
-  // The next thing coming up: a show or a calendar event, whichever is sooner.
-  const eventCandidates = calendarEvents
-    .filter(e => e.end_date >= today)
-    .map(e => ({ date: e.start_date < today ? today : e.start_date, title: e.title }))
-  const nextEvent = [...eventCandidates].sort((a, b) => a.date.localeCompare(b.date))[0]
-  const showDate = next?.show_date ?? null
-  const nextIsEvent = !!nextEvent && (!showDate || nextEvent.date < showDate)
-  const nextUpDate = nextIsEvent ? nextEvent.date : showDate
-  const later = upcoming.slice(1, 4)
+  // Everything coming up, shows and calendar events together, soonest first. An event that started earlier and is
+  // still running counts as today. On the same day a show comes before an event.
+  type Upcoming =
+    | { kind: 'show'; key: string; date: string; title: string; show: (typeof upcoming)[number] }
+    | { kind: 'event'; key: string; date: string; title: string }
+  const comingUp: Upcoming[] = [
+    ...(canSee('shows') ? upcoming.map(s => ({ kind: 'show' as const, key: `s-${s.id}`, date: s.show_date!, title: s.title, show: s })) : []),
+    ...calendarEvents
+      .filter(e => e.end_date >= today)
+      .map(e => ({ kind: 'event' as const, key: `e-${e.id}`, date: e.start_date < today ? today : e.start_date, title: e.title })),
+  ].sort((a, b) => a.date.localeCompare(b.date) || (a.kind === b.kind ? 0 : a.kind === 'show' ? -1 : 1))
+  const first = comingUp[0]
+  const next = first?.kind === 'show' ? first.show : undefined
+  const nextEvent = first?.kind === 'event' ? first : undefined
+  const nextUpDate = first?.date ?? null
+  const later = comingUp.slice(1, 4)
   const days = nextUpDate ? daysUntil(nextUpDate, today) : null
   const nextSetlist = next ? setlistsByShow.find(s => s.show_id === next.id) : undefined
   const nextSongCount = nextSetlist ? songCounts.filter(c => c.setlist_id === nextSetlist.id).length : 0
@@ -271,22 +278,25 @@ export default async function TodayPage() {
     })
   }
 
-  if (showShows) {
+  if (showShows || canSee('calendar')) {
     widgets.push({
       id: 'coming-up',
       span: 4,
       node: (
         <section className={card}>
-          <div className="flex items-center justify-between"><h2 className={eyebrow}>Coming up</h2><SectionTag label="Shows" /></div>
+          <div className="flex items-center justify-between"><h2 className={eyebrow}>Coming up</h2><SectionTag label={showShows ? 'Shows' : 'Calendar'} /></div>
           {later.length === 0 ? (
-            <p className="text-sm text-gray-500">No more shows on the calendar.</p>
+            <p className="text-sm text-gray-500">Nothing else on the calendar.</p>
           ) : (
             <ul className="space-y-2">
-              {later.map(s => (
-                <li key={s.id}>
-                  <Link href={`/shows/${s.id}`} className="flex items-baseline justify-between gap-3 text-sm hover:text-brand-700">
-                    <span className="min-w-0 truncate text-gray-900">{s.title}</span>
-                    <span className="shrink-0 text-xs text-gray-500">{shortDate(s.show_date!)}</span>
+              {later.map(item => (
+                <li key={item.key}>
+                  <Link href={item.kind === 'show' ? `/shows/${item.show.id}` : '/calendar'} className="flex items-baseline justify-between gap-3 text-sm hover:text-brand-700">
+                    <span className="flex min-w-0 items-baseline gap-1.5">
+                      {item.kind === 'event' && <span className="shrink-0 rounded-full bg-amber-100 px-1.5 text-[10px] font-bold text-amber-800">Event</span>}
+                      <span className="min-w-0 truncate text-gray-900">{item.title}</span>
+                    </span>
+                    <span className="shrink-0 text-xs text-gray-500">{shortDate(item.date)}</span>
                   </Link>
                 </li>
               ))}
@@ -306,7 +316,7 @@ export default async function TodayPage() {
       <header>
         <p className={eyebrow}>{todayLabel}</p>
         <h1 className="mt-1 text-3xl font-bold text-gray-900 sm:text-4xl">{firstName ? `Hi ${firstName}` : "Welcome back"}</h1>
-        {days !== null && <p className="mt-1 text-base text-gray-600">{headline(days)}</p>}
+        {days !== null && <p className="mt-1 text-base text-gray-600">{headline(days, nextEvent?.title)}</p>}
       </header>
 
       {(canLogMoney || quickActions.length > 0) && (
