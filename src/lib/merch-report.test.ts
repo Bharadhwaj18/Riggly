@@ -86,3 +86,18 @@ describe('helpers', () => {
     expect(csv[1].startsWith('Blue Frog,2026-11-01,16,1,0,3500,3300,1300')).toBe(true)
   })
 })
+
+describe('approved amounts', () => {
+  it('uses what went into Finance once approved', () => {
+    const r = buildMerchReport({
+      ...base,
+      sales: [
+        sale({ id: 'a', show_id: 's1', show, cash_amount: 2000, status: 'approved', approved_amount: 2500 }),
+        sale({ id: 'k1', show_id: 's1', show, kit_id: 'kit', cash_amount: 900 }),
+      ],
+      kits: [{ id: 'kit', show_id: 's1', status: 'approved', cash_in: 900, upi_in: 0, card_in: 0, approved_amount: 1000 }],
+      period: november,
+    })
+    expect(r.byShow[0]).toMatchObject({ taken: 3500, pending: 0 })
+  })
+})

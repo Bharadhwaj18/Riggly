@@ -16,6 +16,8 @@ import { useMoney } from '@/components/finance/FinanceSettingsContext'
 import { formatDateDMY } from '@/lib/dates'
 import { groupSalesByShow, saleTakings, type MerchMove, type MerchSale } from '@/lib/merch'
 import { approveMerchSales, deleteMerchSale, rejectMerchSale } from '@/actions/merch'
+import { AmountField } from './AmountField'
+import { ReasonButton } from '@/components/ui/ReasonButton'
 
 export type SaleWithShow = MerchSale & { show: { id: string; title: string; show_date: string | null } | null }
 /** `crew`: Merch crew. Named in Merch, but never picked to hold the band's money. */
@@ -145,25 +147,29 @@ function ApproveForm({ sales, onDone, members: everyone, accounts }: { sales: Sa
   const [to, setTo] = useState(firstHolder && members.some(m => m.id === firstHolder) ? `m:${firstHolder}` : members[0] ? `m:${members[0].id}` : '')
   const [busy, setBusy] = useState(false)
   const total = sales.reduce((n, s) => n + saleTakings(s), 0)
+  const [amount, setAmount] = useState(String(Math.round(total * 100) / 100))
+  const value = Number(amount)
+  const valid = amount.trim() !== '' && Number.isFinite(value) && value >= 0
 
   const approve = async () => {
+    if (!valid) return
     setBusy(true)
-    const res = await approveMerchSales(sales.map(s => s.id), to.startsWith('a:') ? { accountId: to.slice(2) } : { memberId: to.slice(2) })
+    const res = await approveMerchSales(sales.map(s => s.id), to.startsWith('a:') ? { accountId: to.slice(2) } : { memberId: to.slice(2) }, value)
     setBusy(false)
     if (res.error) { toast(res.error, 'error'); return }
-    toast(total > 0 ? `${money(total)} added to Finance` : 'Approved', 'success')
+    toast(value > 0 ? `${money(value)} added to Finance` : 'Approved', 'success')
     router.refresh()
     onDone()
   }
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl bg-brand-50 px-4 py-3">
+      <div>
         <p className="text-sm text-gray-600">{groupTitle(sales)}</p>
-        <p className="text-2xl font-bold tabular-nums text-gray-900">{money(total)}</p>
         <p className="text-xs text-gray-500">{paymentLine(sales, money)}</p>
       </div>
-      {total > 0 && (
+      <AmountField id="approve-amount" label="Amount going into Finance" amount={amount} setAmount={setAmount} recorded={total} recordedLabel="recorded" />
+      {value > 0 && (
         <div className="space-y-1.5">
           <Label htmlFor="approve-to">Who has the money</Label>
           <Select id="approve-to" value={to} onChange={e => setTo(e.target.value)}>
@@ -175,7 +181,7 @@ function ApproveForm({ sales, onDone, members: everyone, accounts }: { sales: Sa
       )}
       <div className="flex justify-end gap-2">
         <Button variant="secondary" onClick={onDone}>Cancel</Button>
-        <Button onClick={approve} loading={busy}>Approve</Button>
+        <ReasonButton onClick={approve} loading={busy} blocked={valid ? null : 'Enter an amount of 0 or more.'}>Approve</ReasonButton>
       </div>
     </div>
   )

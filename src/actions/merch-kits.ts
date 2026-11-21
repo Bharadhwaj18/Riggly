@@ -265,16 +265,18 @@ export async function reopenMerchKit(kitId: string): Promise<Result> {
 }
 
 /** Approves a closed kit: one Finance income entry, giveaways and losses off stock, everything locked. */
-export async function approveMerchKit(kitId: string, to: { memberId?: string | null; accountId?: string | null } = {}): Promise<Result> {
+/** `amount`: what goes into Finance; leave it out to use the money handed in. */
+export async function approveMerchKit(kitId: string, to: { memberId?: string | null; accountId?: string | null } = {}, amount?: number | null): Promise<Result> {
   const { supabase, user } = await signedIn()
   if (!user) return { error: 'Not signed in' }
   if (to.accountId && !(await getCachedFinanceSettings()).features.accounts) return { error: 'Band accounts are switched off for this workspace.' }
   const { data: kit } = await supabase.from('merch_kits').select('lead_id, show_id, cash_in, upi_in, card_in').eq('id', kitId).maybeSingle()
-  const { data: txId, error } = await supabase.rpc('approve_merch_kit', { p_kit: kitId, p_member: to.memberId || null, p_account: to.accountId || null })
+  if (amount != null && (!Number.isFinite(Number(amount)) || Number(amount) < 0)) return { error: 'Enter an amount of 0 or more.' }
+  const { data: txId, error } = await supabase.rpc('approve_merch_kit', { p_kit: kitId, p_member: to.memberId || null, p_account: to.accountId || null, p_amount: amount == null ? null : Math.round(Number(amount) * 100) / 100 })
   if (error) return { error: friendly(error.message) }
   await notifyLowStockForKit(await requireWorkspaceId(), user.id, kitId, 'approve')
   if (kit?.lead_id && kit.lead_id !== user.id) {
-    const total = Number(kit.cash_in ?? 0) + Number(kit.upi_in ?? 0) + Number(kit.card_in ?? 0)
+    const total = amount != null ? Number(amount) : Number(kit.cash_in ?? 0) + Number(kit.upi_in ?? 0) + Number(kit.card_in ?? 0)
     await sendNotification({ recipientId: kit.lead_id, title: `Merch kit approved: ${await moneyText(total)}`, body: 'Thanks for running the stall.', link: `/merch/kits/${kitId}`, type: 'merch_kit_approved' })
   }
   revalidatePath('/finance', 'layout')

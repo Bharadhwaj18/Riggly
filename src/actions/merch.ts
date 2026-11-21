@@ -407,7 +407,7 @@ export async function rejectMerchSale(id: string, reason: string): Promise<Resul
  * Approves pending sales from one show (or all from no show) and writes one Finance income entry for their total.
  * The money is held by `memberId` or `accountId`; with neither, by whoever held it on the first sale.
  */
-export async function approveMerchSales(saleIds: string[], to: { memberId?: string | null; accountId?: string | null } = {}): Promise<Result> {
+export async function approveMerchSales(saleIds: string[], to: { memberId?: string | null; accountId?: string | null } = {}, amount?: number | null): Promise<Result> {
   const { supabase, user } = await signedIn()
   if (!user) return { error: 'Not signed in' }
   if (!saleIds?.length) return { error: 'Pick at least one sale.' }
@@ -416,10 +416,11 @@ export async function approveMerchSales(saleIds: string[], to: { memberId?: stri
   if (to.accountId && !(await getCachedFinanceSettings()).features.accounts) return { error: 'Band accounts are switched off for this workspace.' }
 
   const { data: sales } = await supabase.from('merch_sales').select('created_by, show_id, cash_amount, upi_amount, card_amount').in('id', saleIds)
-  const { data: txId, error } = await supabase.rpc('approve_merch_sales', { p_ids: saleIds, p_member: to.memberId || null, p_account: to.accountId || null })
+  if (amount != null && (!Number.isFinite(Number(amount)) || Number(amount) < 0)) return { error: 'Enter an amount of 0 or more.' }
+  const { data: txId, error } = await supabase.rpc('approve_merch_sales', { p_ids: saleIds, p_member: to.memberId || null, p_account: to.accountId || null, p_amount: amount == null ? null : Math.round(Number(amount) * 100) / 100 })
   if (error) return { error: friendly(error.message) }
 
-  const total = (sales ?? []).reduce((sum, s) => sum + saleTakings(s), 0)
+  const total = amount != null ? Number(amount) : (sales ?? []).reduce((sum, s) => sum + saleTakings(s), 0)
   for (const recipientId of new Set((sales ?? []).map(s => s.created_by).filter(id => id !== user.id))) {
     await sendNotification({ recipientId, title: `Merch takings approved: ${await moneyText(total)}`, body: 'Added to Finance.', link: '/finance', type: 'merch_sale_decided' })
   }
