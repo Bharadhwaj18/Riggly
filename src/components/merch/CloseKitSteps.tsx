@@ -211,8 +211,24 @@ export function CloseKitSteps({ kitId, lines, stallSales, tappedBy, onClose, onC
           <ul className="divide-y divide-brand-100 rounded-xl border border-brand-100 text-sm">
             <Row label={`Sold (${soldTotal}) should bring in`} value={money(shouldBe)} />
             {given + lost > 0 && <Row label="Given away / lost" value={`${given} / ${lost}`} />}
-            <Row label="Handing in" value={money(handing)} strong />
           </ul>
+          {/* The money handed in can still be changed here, right before closing. */}
+          <div className="rounded-xl border border-brand-100 p-3">
+            <div className="mb-2 flex items-baseline justify-between">
+              <SectionLabel>Handing in</SectionLabel>
+              <span className="text-lg font-bold tabular-nums text-gray-900">{money(handing)}</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {METHODS.map(m => (
+                <div key={m.value} className="space-y-1">
+                  <Label htmlFor={`final-${m.value}`} className="text-xs">{m.label} ({symbol})</Label>
+                  <Input id={`final-${m.value}`} type="number" inputMode="decimal" min={0} step="0.01" placeholder="0"
+                    value={paidText ? paidText[m.value] : fmtAmt(paid[m.value])}
+                    onChange={e => setPaidText(p => ({ ...(p ?? { cash: fmtAmt(paid.cash), upi: fmtAmt(paid.upi), card: fmtAmt(paid.card) }), [m.value]: e.target.value }))} />
+                </div>
+              ))}
+            </div>
+          </div>
           {handing !== shouldBe && (
             <p className="text-sm font-semibold text-amber-600">{handing < shouldBe ? 'Short' : 'Over'} by {money(Math.abs(handing - shouldBe))} against what was sold.</p>
           )}
