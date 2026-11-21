@@ -1,9 +1,10 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Manrope, Fraunces, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import { ToastProvider } from '@/components/ui/Toaster'
 import { ServiceWorkerRegistration } from '@/components/ServiceWorkerRegistration'
 import { THEME_INIT_SCRIPT } from '@/lib/theme'
+import { IOS_VIEWPORT_SCRIPT } from '@/lib/ios-viewport'
 import { APP_NAME, APP_TAGLINE } from '@/lib/brand'
 
 const manrope = Manrope({ variable: '--font-manrope', subsets: ['latin'] })
@@ -16,11 +17,15 @@ export const metadata: Metadata = {
   manifest: '/manifest.json',
 }
 
+// The keyboard resizes the page instead of sliding it under (Chrome; Safari ignores it and is handled by h-dvh).
+export const viewport: Viewport = { width: 'device-width', initialScale: 1, interactiveWidget: 'resizes-content' }
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning className={`${manrope.variable} ${fraunces.variable} ${geistMono.variable} h-full antialiased`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: IOS_VIEWPORT_SCRIPT }} />
       </head>
       <body className="h-full bg-brand-50 text-gray-900">
         <ServiceWorkerRegistration />

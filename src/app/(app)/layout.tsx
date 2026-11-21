@@ -86,7 +86,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   return (
     <PlayerProvider>
     <PayablesProvider payables={payables}>
-    <div className="flex h-screen">
+    {/* dvh, not vh: on iPhone Safari 100vh is taller than what is visible, so focusing a field scrolled the whole page. */}
+    <div className="flex h-dvh">
       <RememberLastPage />
       <OfflineUserSync email={effectiveUser.email ?? ''} displayName={profile?.display_name ?? ''} />
       <IdentifyUser userId={effectiveUser.id} email={effectiveUser.email} name={profile?.display_name} />
