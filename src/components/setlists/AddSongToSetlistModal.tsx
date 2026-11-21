@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { canAutoFocus } from '@/lib/pointer'
 import { Search, Plus, Check, PlusCircle } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
@@ -145,7 +146,7 @@ export function AddSongToSetlistModal({ setlistId, allSongs, currentSongIds, ava
             value={query}
             onChange={e => setQuery(e.target.value)}
             className="w-full rounded-md border border-brand-200 py-2 pl-9 pr-3 text-sm focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-400"
-            autoFocus
+            autoFocus={canAutoFocus()}
           />
         </div>
 

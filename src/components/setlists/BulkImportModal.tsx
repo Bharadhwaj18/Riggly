@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useTransition } from 'react'
+import { canAutoFocus } from '@/lib/pointer'
 import { Upload, Music2, Tag, AlertCircle, Search, Check, ChevronLeft, X } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
@@ -179,7 +180,7 @@ export function BulkImportModal({ setlistId, existingSongs, currentSongTitles }:
               placeholder={`Paste your setlist here, e.g.:\n\nMain Set\n1. Manovega E\n2. Om shivoham C#\n3. Aigiri D\n\nExtra\n1. Nagumo C\n2. Baaro krishnayya\n\nOr, with no numbering at all (one section, auto-numbered):\n\nManovega E\nOm shivoham C#\nAigiri D`}
               value={text}
               onChange={e => setText(e.target.value)}
-              autoFocus
+              autoFocus={canAutoFocus()}
             />
 
             {parsed.length > 0 && (

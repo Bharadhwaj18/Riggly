@@ -20,7 +20,10 @@ export function Modal({ open, onOpenChange, title, description, children, classN
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
         <Dialog.Content
           className={cn(
-            'fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg bg-white p-6 shadow-xl',
+            // Phones: pinned near the top, sized to the visible screen (dvh), so the keyboard opens below it and Safari
+            // has no reason to scroll the page to reach a field. Larger screens: centred as before.
+            'fixed left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] z-50 max-h-[calc(100dvh-1.5rem)] w-full max-w-lg -translate-x-1/2 overflow-y-auto overscroll-contain rounded-lg bg-white p-6 shadow-xl',
+            'sm:top-1/2 sm:max-h-[90dvh] sm:-translate-y-1/2',
             'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
             className
           )}
