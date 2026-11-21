@@ -522,3 +522,26 @@ export async function withdrawFinanceRequest(id: string): Promise<{ error?: stri
   revalidatePath('/finance')
   return {}
 }
+
+/**
+ * Marks a show as split without running a split, for when its money was already shared out some other way (or it
+ * shows as unsplit by mistake). No payments are created. Like a real split, it stops new entries going onto the
+ * show. `split: false` is the Undo right after marking it. Owners, admins and treasurers only.
+ */
+export async function setShowSplit(showId: string, split: boolean): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+  if (!(await isApprover())) return { error: 'Only an admin or treasurer can mark a show as split.' }
+
+  const { data: show } = await supabase.from('shows').select('id').eq('id', showId).eq('workspace_id', await requireWorkspaceId()).maybeSingle()
+  if (!show) return { error: 'That show is no longer there.' }
+
+  const { error } = await supabase.from('shows').update({ split_at: split ? new Date().toISOString() : null }).eq('id', showId)
+  if (error) return { error: error.message }
+
+  revalidatePath(`/shows/${showId}`)
+  revalidatePath('/shows')
+  revalidatePath('/finance', 'layout')
+  return {}
+}

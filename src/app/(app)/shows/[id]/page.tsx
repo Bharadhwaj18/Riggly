@@ -17,7 +17,8 @@ import { computeTds } from '@/lib/finance/tds'
 import { todayISO } from '@/lib/shows'
 import { countdownLabel } from '@/lib/dates'
 import { cn } from '@/lib/utils'
-import { getWorkspaceContext, isMerchApprover } from '@/lib/workspace'
+import { getWorkspaceContext, isFinanceApprover, isMerchApprover } from '@/lib/workspace'
+import { MarkSplitButton } from '@/components/shows/MarkSplitButton'
 import { KIT_STATUS_LABELS, saleTakings, type KitStatus } from '@/lib/merch'
 
 
@@ -321,9 +322,12 @@ export default async function ShowDetailPage({ params }: Props) {
               </p>
             </div>
             {!isSplit && (
-              <Link href="/finance/split" className="shrink-0 rounded-lg bg-sidebar-accent px-4 py-2 text-sm font-bold text-sidebar-active-fg hover:opacity-90">
-                Go split →
-              </Link>
+              <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                {ctx && isFinanceApprover(ctx.current) && <MarkSplitButton showId={show.id} />}
+                <Link href="/finance/split" className="shrink-0 rounded-lg bg-sidebar-accent px-4 py-2 text-sm font-bold text-sidebar-active-fg hover:opacity-90">
+                  Go split →
+                </Link>
+              </div>
             )}
           </section>
         </div>
