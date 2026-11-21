@@ -41,6 +41,16 @@ const KINDS: CalendarKind[] = ['show', 'task', 'off', 'event', 'else']
 const MAX_PILLS = 2
 const HIDDEN_KINDS_KEY = 'rigly.calendar.hiddenKinds'
 
+/** The phone key's marker for each kind, matching how it appears on the month. */
+const PHONE_KEY: Record<CalendarKind, ReactNode> = {
+  show: <span className="h-3.5 w-3.5 rounded bg-brand-400" />,
+  event: <span className="h-[3px] w-3 rounded-full bg-amber-500" />,
+  task: <SquareCheck className="h-3 w-3 text-sky-600" strokeWidth={3} />,
+  off: <span className="h-3.5 w-3.5 rounded ring-1 ring-inset ring-red-300" />,
+  else: <span className="h-3.5 w-3.5 rounded border-[1.5px] border-dashed border-gray-400" />,
+}
+const PHONE_KEY_LABEL: Record<CalendarKind, string> = { show: 'Show', event: 'Event', task: 'Task due', off: 'Away', else: 'Busy elsewhere' }
+
 interface DayPill { key: string; kind: CalendarKind; label: string; done?: boolean }
 
 const EMPTY_DAY: DayItems = { shows: [], tasks: [], unavailability: [], events: [], external: [] }
@@ -189,7 +199,8 @@ export function CalendarMonthView({
       {note && <p className="mb-3 text-sm text-gray-500">{note}</p>}
 
       {/* What to show: tap a kind to switch it off or on. Doubles as the colour key. */}
-      <div role="group" aria-label="What to show" className="-mx-4 mb-3 flex items-center gap-1.5 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-wrap md:overflow-visible md:px-0 md:pb-0">
+      {/* Desktop only; on phones the key under the month does the same job. */}
+      <div role="group" aria-label="What to show" className="mb-3 hidden flex-wrap items-center gap-1.5 md:flex">
         {kinds.map(k => (
           <button
             key={k}
@@ -198,7 +209,7 @@ export function CalendarMonthView({
             aria-pressed={isOn(k)}
             title={isOn(k) ? `Hide ${KIND_LABEL[k].toLowerCase()}` : `Show ${KIND_LABEL[k].toLowerCase()}`}
             className={cn(
-              'inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-xs font-extrabold transition-opacity md:px-2.5 md:py-0.5 md:text-[11px]',
+              'inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-extrabold transition-opacity',
               isOn(k) ? KIND_PILL[k] : 'border border-dashed border-gray-300 bg-transparent text-gray-400 line-through opacity-70'
             )}
           >
@@ -207,7 +218,7 @@ export function CalendarMonthView({
           </button>
         ))}
         {hiddenKinds.length > 0 && (
-          <button type="button" onClick={() => saveHidden([])} className="shrink-0 px-1.5 text-xs font-bold text-brand-600 underline md:text-[11px]">Show all</button>
+          <button type="button" onClick={() => saveHidden([])} className="shrink-0 px-1.5 text-[11px] font-bold text-brand-600 underline">Show all</button>
         )}
       </div>
       {hiddenOnDay > 0 && (
@@ -341,12 +352,23 @@ export function CalendarMonthView({
             })}
           </div>
           </div>
-          <div aria-hidden="true" className="mt-2 flex flex-wrap gap-x-3 gap-y-1 border-t border-brand-100 px-2 pt-2 text-[11px] font-bold text-gray-500">
-            <span className="inline-flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded bg-brand-400" />Show</span>
-            <span className="inline-flex items-center gap-1.5"><span className="h-[3px] w-3 rounded-full bg-amber-500" />Event</span>
-            <span className="inline-flex items-center gap-1.5"><SquareCheck className="h-3 w-3 text-sky-600" strokeWidth={3} />Task due</span>
-            <span className="inline-flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded ring-1 ring-inset ring-red-300" />Away</span>
-            <span className="inline-flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded border-[1.5px] border-dashed border-gray-400" />Busy elsewhere</span>
+          {/* The key doubles as the filter: tap a kind to hide or show it. */}
+          <div role="group" aria-label="What to show" className="mt-2 flex flex-wrap items-center gap-x-1 gap-y-1 border-t border-brand-100 px-1 pt-2 text-[11px] font-bold">
+            {(['show', 'event', 'task', 'off', 'else'] as const).filter(k => kinds.includes(k)).map(k => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => toggleKind(k)}
+                aria-pressed={isOn(k)}
+                className={cn('inline-flex items-center gap-1.5 rounded-lg px-1.5 py-1 transition-opacity', isOn(k) ? 'text-gray-500' : 'text-gray-400 line-through opacity-50')}
+              >
+                {PHONE_KEY[k]}
+                {PHONE_KEY_LABEL[k]}
+              </button>
+            ))}
+            {hiddenKinds.length > 0 && (
+              <button type="button" onClick={() => saveHidden([])} className="px-1.5 py-1 font-bold text-brand-600 underline">Show all</button>
+            )}
           </div>
         </div>
 

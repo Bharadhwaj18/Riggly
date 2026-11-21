@@ -1,9 +1,10 @@
 import Link from 'next/link'
 import { sectionGuard } from '@/lib/section-guard'
 import { redirect } from 'next/navigation'
-import { ChevronLeft, Plus, CalendarDays } from 'lucide-react'
+import { ChevronLeft, Plus } from 'lucide-react'
 import { SetlistForm } from '@/components/setlists/SetlistForm'
-import { createSetlist, createSetlistFromShow } from '@/actions/setlists'
+import { createSetlist } from '@/actions/setlists'
+import { UpcomingShowPicker } from '@/components/setlists/UpcomingShowPicker'
 import { getCachedShow, getCachedShows, getCachedSetlistsByShow } from '@/lib/data'
 import { todayISO, isUpcoming } from '@/lib/shows'
 
@@ -34,7 +35,6 @@ export default async function NewSetlistPage({ searchParams }: Props) {
     const upcoming = shows
       .filter(s => isUpcoming(s.show_date, today) && !showIdsWithSetlist.has(s.id))
       .sort((a, b) => (a.show_date ?? '').localeCompare(b.show_date ?? ''))
-      .slice(0, 3)
 
     return (
       <div className="max-w-xl">
@@ -47,25 +47,7 @@ export default async function NewSetlistPage({ searchParams }: Props) {
         </p>
 
         {upcoming.length > 0 && (
-          <div className="mb-6 space-y-2">
-            {upcoming.map(s => (
-              <form key={s.id} action={createSetlistFromShow.bind(null, s.id)}>
-                <button
-                  type="submit"
-                  className="flex w-full items-center justify-between rounded-2xl border border-brand-200 bg-white px-4 py-3.5 text-left shadow-sm transition-colors hover:border-brand-400"
-                >
-                  <div>
-                    <p className="font-medium text-gray-900">{s.title}</p>
-                    <p className="text-xs text-gray-400">
-                      {s.show_date && new Date(s.show_date + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })}
-                      {s.venue ? ` · ${s.venue}` : ''}
-                    </p>
-                  </div>
-                  <CalendarDays className="h-4 w-4 shrink-0 text-brand-300" />
-                </button>
-              </form>
-            ))}
-          </div>
+          <UpcomingShowPicker shows={upcoming.map(s => ({ id: s.id, title: s.title, show_date: s.show_date, venue: s.venue }))} />
         )}
 
         <Link
