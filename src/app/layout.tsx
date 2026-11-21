@@ -4,7 +4,8 @@ import './globals.css'
 import { ToastProvider } from '@/components/ui/Toaster'
 import { ServiceWorkerRegistration } from '@/components/ServiceWorkerRegistration'
 import { THEME_INIT_SCRIPT } from '@/lib/theme'
-import { IOS_VIEWPORT_SCRIPT } from '@/lib/ios-viewport'
+import { headers } from 'next/headers'
+import { IOS_VIEWPORT_SCRIPT, isIOS } from '@/lib/ios-viewport'
 import { APP_NAME, APP_TAGLINE } from '@/lib/brand'
 
 const manrope = Manrope({ variable: '--font-manrope', subsets: ['latin'] })
@@ -18,7 +19,18 @@ export const metadata: Metadata = {
 }
 
 // The keyboard resizes the page instead of sliding it under (Chrome; Safari ignores it and is handled by h-dvh).
-export const viewport: Viewport = { width: 'device-width', initialScale: 1, interactiveWidget: 'resizes-content' }
+// iPhone/iPad Safari zooms into any field under 16px when it's tapped; maximum-scale=1 stops that, and iOS still
+// allows pinch-zoom. Sent from the server so nothing on the page can undo it. Android doesn't get it, since there
+// it would block pinch-zoom.
+export async function generateViewport(): Promise<Viewport> {
+  const ua = (await headers()).get('user-agent') ?? ''
+  return {
+    width: 'device-width',
+    initialScale: 1,
+    interactiveWidget: 'resizes-content',
+    ...(isIOS(ua) ? { maximumScale: 1 } : {}),
+  }
+}
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

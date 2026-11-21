@@ -272,6 +272,13 @@ h1, h2 {
     font-size: 16px !important;
   }
 }
+/* Rich-text boxes (the chord/lyrics editor) zoom the same way. On iPhone/iPad (any width, so landscape and iPad
+   too) they get 16px; the viewport script in src/lib/ios-viewport.ts covers everything else. */
+@supports (-webkit-touch-callout: none) {
+  [contenteditable='true']:not(.compact-field) {
+    font-size: 16px !important;
+  }
+}
 
 /* === Workspace avatar tones (see src/lib/workspace-tones.ts) === */
 :root {
