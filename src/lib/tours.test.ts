@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildWalkthrough, pathMatches, tourForPath, TOURS, toursFor } from './tours'
+import { buildWalkthrough, pathMatches, tourForPath, TOURS, toursFor, WALKTHROUGH_MAX_STEPS } from './tours'
 
 describe('tours', () => {
   it('each tour starts on its own page', () => {
@@ -32,20 +32,25 @@ describe('tours', () => {
 })
 
 describe('full walkthrough', () => {
-  it('runs every tour in order, with a step that moves to each next section', () => {
+  it('stays short: ten steps at most, even with every section', () => {
+    expect(buildWalkthrough(TOURS).steps.length).toBeLessThanOrEqual(WALKTHROUGH_MAX_STEPS)
+  })
+  it('visits each section in order, moving to its page on the step before', () => {
     const w = buildWalkthrough(TOURS)
-    expect(w.steps.length).toBe(TOURS.reduce((n, t) => n + t.steps.length, 0) + (TOURS.length - 1) + 1)
     const moves = w.steps.filter(s => s.goTo).map(s => s.goTo)
     expect(moves).toEqual(TOURS.slice(1).map(t => t.startPath))
+  })
+  it('only has steps that wait for Next, never one that needs a tap', () => {
+    expect(buildWalkthrough(TOURS).steps.some(s => s.action === 'tap')).toBe(false)
   })
   it('only covers the sections it is given', () => {
     const w = buildWalkthrough(TOURS.filter(t => t.id !== 'songs'))
     expect(w.steps.some(s => s.path.startsWith('^/songs'))).toBe(false)
     expect(w.steps.some(s => s.goTo === '/songs')).toBe(false)
   })
-  it('a move step sits on the page the previous step was on', () => {
+  it('the step after a move is on the page it moves to', () => {
     const w = buildWalkthrough(TOURS)
-    w.steps.forEach((s, i) => { if (s.goTo) expect(s.path).toBe(w.steps[i - 1].path) })
+    w.steps.forEach((s, i) => { if (s.goTo) expect(pathMatches(w.steps[i + 1], s.goTo), s.title).toBe(true) })
   })
 })
 
