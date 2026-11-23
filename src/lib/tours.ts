@@ -13,8 +13,12 @@ export interface TourStep {
   target?: string[]
   title: string
   body: string
+  /** This step is about a section; it's left out when that section is off. */
+  section?: SectionKey
   /** 'tap': the tour moves on when the highlighted thing is tapped (no Next button). */
   action?: 'tap'
+  /** Next goes to this page (used to move between sections in the full walkthrough). */
+  goTo?: string
 }
 
 export interface Tour {
@@ -41,9 +45,9 @@ export const TOURS: Tour[] = [
     steps: [
       { path: '^/$', title: 'Welcome to Rigly', body: 'This is Today: what’s coming up for your band, at a glance. It takes a minute to show you around.' },
       { path: '^/$', target: ['[data-tour="today-hero-show"]', '[data-tour="today-hero-event"]', '[data-tour="today-hero-empty"]'], title: 'What’s next', body: 'Your next show or event, with its setlist. Tap through to everything about it.' },
-      { path: '^/$', target: ['[data-tour="today-tasks"]'], title: 'Your tasks', body: 'Things assigned to you, soonest first. Overdue ones turn red.' },
-      { path: '^/$', target: ['[data-tour="today-actions"]', '[aria-label="Add something"]'], title: 'Add things fast', body: 'Add a show, setlist, song or money from here. On a phone, the + button does the same from any page.' },
-      { path: '^/$', target: NAV, title: 'Everything else', body: 'Shows, setlists, songs, calendar, tasks and money all live here. Each one has its own short tour under Settings → Help & tours.' },
+      { path: '^/$', section: 'tasks', target: ['[data-tour="today-tasks"]'], title: 'Your tasks', body: 'Things assigned to you, soonest first. Overdue ones turn red.' },
+      { path: '^/$', target: ['[data-tour="today-actions"]', '[aria-label="Add something"]'], title: 'Add things fast', body: 'Add a show, setlist or song from here. On a phone, the + button does the same from any page.' },
+      { path: '^/$', target: NAV, title: 'Everything else', body: 'Every part of your workspace lives here. Each one has its own short tour under Settings → Help & tours.' },
     ],
   },
   {
@@ -58,7 +62,7 @@ export const TOURS: Tour[] = [
       { path: '^/shows$', target: ['[data-tour="show-status"]'], title: 'Move a show along', body: 'Tap a status to change it: Inquiry, Quotation Shared, Confirmed, Advance Received, Completed. Everyone is told when a show gets booked.' },
       { path: '^/shows$', target: ['[data-tour="show-row"]'], title: 'Open a show', body: 'Tap this show to open it.', action: 'tap' },
       { path: '^/shows/[^/]+$', target: ['[data-tour="show-progress"]'], title: 'Where it stands', body: 'Booked, setlist ready, paid and split: what’s done and what isn’t, for this show.' },
-      { path: '^/shows/[^/]+$', title: 'All in one place', body: 'Below: the setlist, the money in and out, merch sold at this show, contacts and documents. That’s Shows. Try changing anything, it’s only the demo.' },
+      { path: '^/shows/[^/]+$', title: 'All in one place', body: 'Everything about this show sits below: its setlist, contacts and documents, plus money and merch if your workspace uses them.' },
     ],
   },
   {
@@ -69,7 +73,7 @@ export const TOURS: Tour[] = [
     startPath: '/setlists',
     steps: [
       { path: '^/setlists$', target: ['main a[href="/setlists/new"]'], title: 'New setlist', body: 'Make one for a show (it picks up the date and venue) or start blank.' },
-      { path: '^/setlists$', target: ['[data-tour="setlist-row"]'], title: 'Open a setlist', body: 'Tap a setlist to open it.', action: 'tap' },
+      { path: '^/setlists$', target: ['[data-tour="setlist-open"]', '[data-tour="setlist-row"]'], title: 'Open a setlist', body: 'Tap here to open the setlist.', action: 'tap' },
       { path: '^/setlists/[^/]+$', target: ['[data-tour="setlist-add-songs"]'], title: 'Add songs', body: 'Search your songs and add them. Group them into sections like Entry or Main Set, and drag to reorder.' },
       { path: '^/setlists/[^/]+$', title: 'On stage', body: 'Stage mode shows one song at a time, big and readable, with its chords. You can also save the setlist for offline or print it as a PDF.' },
     ],
@@ -82,9 +86,22 @@ export const TOURS: Tour[] = [
     startPath: '/songs',
     steps: [
       { path: '^/songs$', target: ['main a[href="/songs/new"]'], title: 'Add a song', body: 'Title, artist, key and tempo, plus a chord chart you can type or import.' },
-      { path: '^/songs$', target: ['main input[type="search"]'], title: 'Find a song', body: 'Search by title or artist. On a long list, jump by letter.' },
+      { path: '^/songs$', target: ['[data-tour="song-search"]'], title: 'Find a song', body: 'Search by title, artist or key. On a long list, jump by letter.' },
       { path: '^/songs$', target: ['[data-tour="song-row"]'], title: 'Open a song', body: 'Tap a song to open it.', action: 'tap' },
-      { path: '^/songs/[^/]+$', title: 'The chart', body: 'The chord chart, ready to play from. Change the key and everything moves with it. Edit to fix chords or add notes for the band.' },
+      { path: '^/songs/[^/]+$', target: ['[data-tour="song-chart"]'], title: 'The chart', body: 'The chord chart, ready to play from. Edit the song to change chords or add notes for the band.' },
+      { path: '^/songs/[^/]+$', target: ['div:has(> [aria-label="Transpose up"])'], title: 'Change the key', body: 'Tap + or − and every chord moves with it. Handy when a singer wants it lower.' },
+    ],
+  },
+  {
+    id: 'finance',
+    section: 'finance',
+    title: 'Money',
+    blurb: 'Who got paid, who paid for what, and splitting a show’s money.',
+    startPath: '/finance',
+    steps: [
+      { path: '^/finance$', target: ['[aria-label="Add money in or out"]'], title: 'Log money', body: 'Every fee, advance and expense goes in here: who got the money or who paid, what for, and which show it belongs to.' },
+      { path: '^/finance$', target: ['[data-tour="finance-balances"]'], title: 'Balances', body: 'What each person holds right now. It adds up from every entry, so it’s always current.' },
+      { path: '^/finance$', target: ['nav[aria-label="Money tools"]'], title: 'Splitting and history', body: 'After a show, Split divides what’s left between the band. History shows every entry, and Reports show where the money went.' },
     ],
   },
   {
@@ -119,3 +136,34 @@ export const tourById = (id: string) => TOURS.find(t => t.id === id)
 export const tourForPath = (path: string) => TOURS.find(t => t.startPath === path)
 
 export const pathMatches = (step: TourStep, path: string) => new RegExp(step.path).test(path)
+
+/** The full walkthrough: every tour this person can take, one after another, moving between pages as it goes. */
+/** The tours a person can take: only their sections, and within a tour only the steps for sections they have. */
+export function toursFor(hidden: SectionKey[]): Tour[] {
+  return TOURS
+    .filter(t => !t.section || !hidden.includes(t.section))
+    .map(t => ({ ...t, steps: t.steps.filter(s => !s.section || !hidden.includes(s.section)) }))
+}
+
+export function buildWalkthrough(tours: Tour[]): Tour {
+  const steps: TourStep[] = []
+  tours.forEach((t, i) => {
+    if (i > 0) {
+      const prev = steps[steps.length - 1]
+      steps.push({ path: prev.path, title: `Next: ${t.title}`, body: t.blurb, goTo: t.startPath })
+    }
+    steps.push(...t.steps)
+  })
+  const last = steps[steps.length - 1]
+  steps.push({ path: last?.path ?? '.*', title: 'That’s Rigly', body: 'You’ve seen everything your workspace has. Try things out here in the demo, then create your own workspace and invite your band. Settings → Help & tours has every tour again.' })
+  return {
+    id: WALKTHROUGH_ID,
+    section: null,
+    title: 'Full walkthrough',
+    blurb: 'Every part of your workspace, start to finish, in a few minutes.',
+    startPath: '/',
+    steps,
+  }
+}
+
+export const WALKTHROUGH_ID = 'walkthrough'

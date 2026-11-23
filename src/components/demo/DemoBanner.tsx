@@ -2,11 +2,11 @@
 
 import { useTransition } from 'react'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { Compass, RotateCcw, Sparkles } from 'lucide-react'
 import { resetDemo } from '@/actions/demo'
 import { useTour } from '@/components/tour/TourProvider'
-import { tourForPath } from '@/lib/tours'
+import { WALKTHROUGH_ID } from '@/lib/tours'
 import { useToast } from '@/components/ui/Toaster'
 
 /** Shown across the top while you're in a demo band: what it is, how to start over, and how to make your own. */
@@ -15,9 +15,8 @@ export function DemoBanner() {
   const router = useRouter()
   const toast = useToast()
   const { start: startTour } = useTour()
-  const pathname = usePathname()
-  // The tour for this page, or the getting-around one.
-  const showMeAround = () => startTour(tourForPath(pathname)?.id ?? 'today')
+  // The full walkthrough of every section this workspace has.
+  const showMeAround = () => startTour(WALKTHROUGH_ID)
 
   const reset = () => {
     if (!window.confirm('Start the demo over? Everything you changed in it goes back to the sample data.')) return

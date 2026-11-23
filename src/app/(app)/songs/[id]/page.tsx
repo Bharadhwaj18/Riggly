@@ -154,7 +154,7 @@ export default async function SongPage({ params, searchParams }: Props) {
           isAdmin={ctx?.current.role === 'owner' || ctx?.current.role === 'admin'}
           canEditSongs={canEditSongs}
           notes={notesForView}
-          chart={<ChordViewer
+          chart={<div data-tour="song-chart"><ChordViewer
           key={id}
           chordChart={song.chord_chart ?? ''}
           songKey={song.song_key}
@@ -174,7 +174,7 @@ export default async function SongPage({ params, searchParams }: Props) {
             notes: ss.song.notes ?? null,
             section: ss.section ?? null,
           }))}
-        />}
+        /></div>}
         />
 
         <aside className="contents lg:block lg:space-y-4">

@@ -193,7 +193,7 @@ export default async function FinancePage() {
 
       <div className="grid items-start gap-4 lg:grid-cols-[1.1fr_1fr]">
         {/* Balances */}
-        <section className="rounded-2xl border border-brand-200 bg-white p-5 shadow-sm">
+        <section data-tour="finance-balances" className="rounded-2xl border border-brand-200 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between gap-3">
             <SectionLabel>Balances</SectionLabel>
             {settings.features.accounts && (

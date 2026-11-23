@@ -1,11 +1,11 @@
 'use client'
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { ArrowLeft, ArrowRight, Hand, X } from 'lucide-react'
 import { useToast } from '@/components/ui/Toaster'
 import { cn } from '@/lib/utils'
-import { pathMatches, tourById, tourForPath, TOURS, type Tour } from '@/lib/tours'
+import { buildWalkthrough, pathMatches, tourForPath, toursFor, WALKTHROUGH_ID, type Tour } from '@/lib/tours'
 import type { SectionKey } from '@/lib/workspace-sections'
 
 interface TourState { done: string[]; dismissed: string[] }
@@ -73,17 +73,22 @@ export function TourProvider({ userId, inDemo, hiddenSections, children }: {
   }, [userId])
   const save = useCallback((next: TourState) => { setState(next); writeState(userId, next) }, [userId])
 
-  const available = TOURS.filter(t => !t.section || !hiddenSections.includes(t.section)).map(t => ({ ...t, done: state.done.includes(t.id) }))
-  const tour = active ? tourById(active.id) : undefined
+  // Only tours for sections this person has; the full walkthrough strings those together.
+  const hiddenKey = hiddenSections.join(',')
+  const sectionTours = useMemo(() => toursFor(hiddenKey ? (hiddenKey.split(',') as SectionKey[]) : []), [hiddenKey])
+  const walkthrough = useMemo(() => buildWalkthrough(sectionTours), [sectionTours])
+  const getTour = useCallback((id: string) => (id === WALKTHROUGH_ID ? walkthrough : sectionTours.find(t => t.id === id)), [walkthrough, sectionTours])
+  const available = [walkthrough, ...sectionTours].map(t => ({ ...t, done: state.done.includes(t.id) }))
+  const tour = active ? getTour(active.id) : undefined
   const step = tour && active ? tour.steps[active.step] : undefined
 
   const start = useCallback((id: string) => {
-    const t = tourById(id)
+    const t = getTour(id)
     if (!t) return
     setOffer(null)
     setActive({ id, step: 0 })
     if (!pathMatches(t.steps[0], pathname)) router.push(t.startPath)
-  }, [pathname, router])
+  }, [pathname, router, getTour])
 
   const end = useCallback((finished: boolean) => {
     if (!active) return
@@ -91,18 +96,23 @@ export function TourProvider({ userId, inDemo, hiddenSections, children }: {
     setActive(null)
     setRect(null)
     target.current = null
+    // Finishing the walkthrough counts as having seen every tour in it.
+    const finishedIds = id === WALKTHROUGH_ID ? [id, ...sectionTours.map(t => t.id)] : [id]
     save({
-      done: finished ? [...new Set([...state.done, id])] : state.done,
+      done: finished ? [...new Set([...state.done, ...finishedIds])] : state.done,
       dismissed: [...new Set([...state.dismissed, id])],
     })
-    if (finished) toast(`That’s the ${tourById(id)?.title ?? ''} tour. Help & tours in Settings has the others.`, 'success')
-  }, [active, save, state, toast])
+    if (finished) toast(id === WALKTHROUGH_ID ? 'Walkthrough done. Help & tours in Settings has every tour again.' : `That’s the ${getTour(id)?.title ?? ''} tour. Help & tours in Settings has the others.`, 'success')
+  }, [active, save, state, toast, sectionTours, getTour])
 
   const next = useCallback(() => {
     if (!active || !tour) return
-    if (active.step + 1 >= tour.steps.length) end(true)
-    else setActive({ id: active.id, step: active.step + 1 })
-  }, [active, tour, end])
+    if (active.step + 1 >= tour.steps.length) { end(true); return }
+    // Moving on to another section: go to its page; the next step waits for it.
+    const goTo = tour.steps[active.step].goTo
+    if (goTo) router.push(goTo)
+    setActive({ id: active.id, step: active.step + 1 })
+  }, [active, tour, end, router])
   const back = () => { if (active && active.step > 0) setActive({ id: active.id, step: active.step - 1 }) }
 
   // Find the step's element: wait for its page, then for it to appear. Keep the spotlight on it as things move.
@@ -157,12 +167,14 @@ export function TourProvider({ userId, inDemo, hiddenSections, children }: {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setOffer(null)
     if (!inDemo || active) return
-    const t = tourForPath(pathname)
+    // Today offers the full walkthrough; other pages offer their own tour.
+    const found = pathname === '/' ? walkthrough : tourForPath(pathname)
+    const t = found && (found.id === WALKTHROUGH_ID ? found : sectionTours.find(x => x.id === found.id))
     if (!t || state.done.includes(t.id) || state.dismissed.includes(t.id)) return
     if (t.section && hiddenSections.includes(t.section)) return
     const timer = window.setTimeout(() => setOffer(t), 700)
     return () => window.clearTimeout(timer)
-  }, [pathname, inDemo, active, state, hiddenSections])
+  }, [pathname, inDemo, active, state, hiddenSections, walkthrough, sectionTours])
 
   const hole = rect && phase === 'found'
     ? { top: rect.top - PAD, left: rect.left - PAD, width: rect.width + PAD * 2, height: rect.height + PAD * 2 }
@@ -175,7 +187,7 @@ export function TourProvider({ userId, inDemo, hiddenSections, children }: {
       {offer && !active && (
         <div role="dialog" aria-label={`${offer.title} tour`} className="animate-fade-up fixed bottom-24 left-4 right-4 z-[60] rounded-2xl border border-brand-300 bg-white p-4 shadow-xl sm:right-auto sm:w-80 lg:bottom-6">
           <p className="text-xs font-bold uppercase tracking-[0.1em] text-brand-600">New here?</p>
-          <p className="mt-1 text-sm font-bold text-gray-900">Take the 30-second {offer.title} tour</p>
+          <p className="mt-1 text-sm font-bold text-gray-900">{offer.id === WALKTHROUGH_ID ? 'Take a walk through Rigly' : `Take the 30-second ${offer.title} tour`}</p>
           <p className="mt-0.5 text-xs text-gray-500">{offer.blurb}</p>
           <div className="mt-3 flex items-center gap-2">
             <button type="button" onClick={() => start(offer.id)} className="rounded-lg bg-brand-400 px-3.5 py-2 text-sm font-bold text-white hover:bg-brand-500">Show me</button>

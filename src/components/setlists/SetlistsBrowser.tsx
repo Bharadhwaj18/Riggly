@@ -201,7 +201,7 @@ export function SetlistsBrowser({ setlists, countMap, previews, today }: Props) 
 
               <div className="flex flex-wrap gap-2">
                 <Link href={`/setlists/${selected.id}/edit`} className="rounded-lg bg-brand-100 px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-brand-200">Edit</Link>
-                <Link href={`/setlists/${selected.id}`} className="rounded-lg bg-brand-100 px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-brand-200">Export PDF &amp; offline</Link>
+                <Link href={`/setlists/${selected.id}`} data-tour="setlist-open" className="rounded-lg bg-brand-100 px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-brand-200">Export PDF &amp; offline</Link>
               </div>
 
               <div className="h-px bg-brand-200" />
