@@ -23,6 +23,11 @@ describe('matchTitles', () => {
     expect(matchTitles('Ye mera dil', 'Yeh mera dil')).toBe('similar')
     expect(matchTitles('Gaali pata', 'Galipata')).toBe('similar')
   })
+  it('ignores a note in brackets', () => {
+    expect(matchTitles('Mitwa ( Hindi)', 'mitwa')).toBe('similar')
+    expect(matchTitles('Kaantha (Telugu)', 'Kantha')).toBe('similar')
+    expect(matchTitles('Aigiri (Live)', 'Srivalli')).toBeNull()
+  })
   it('catches a single typo in a longer title', () => {
     expect(matchTitles('Sapta saagara', 'Sapthasagara')).toBe('similar')
     expect(matchTitles('Monna kanipinchavu', 'Monna kanipinchavo')).toBe('similar')

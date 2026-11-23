@@ -26,6 +26,9 @@ export function soundKey(title: string): string {
     .replace(/(.)\1+/gu, '$1')
 }
 
+/** The title without anything in brackets: "Mitwa ( Hindi)" -> "Mitwa". */
+const withoutBrackets = (t: string) => t.replace(/[([{][^)\]}]*[)\]}]/g, ' ')
+
 function distance(a: string, b: string): number {
   if (a === b) return 0
   let prev = Array.from({ length: b.length + 1 }, (_, i) => i)
@@ -48,6 +51,9 @@ export function matchTitles(a: string, b: string): MatchKind | null {
   if (na === nb) return 'same'
   const ka = soundKey(a), kb = soundKey(b)
   if (ka === kb) return 'similar'
+  // A language or version note in brackets doesn't make it another song.
+  const ba = withoutBrackets(a), bb = withoutBrackets(b)
+  if ((ba !== a || bb !== b) && normalizeTitle(ba) && normalizeTitle(bb) && soundKey(ba) === soundKey(bb)) return 'similar'
   // One typo apart. Short titles need to be exact on sound, or "Tum" and "Tu" would match.
   const shortest = Math.min(ka.length, kb.length)
   if (shortest < 6) return null
