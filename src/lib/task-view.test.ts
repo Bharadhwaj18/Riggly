@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { DEFAULT_VIEW, activeFilterCount, filterTasks, groupTasks, sortTasks } from './task-view'
+import { DEFAULT_VIEW, activeFilterCount, filterTasks, groupTasks, sectionsByWhen, sortTasks } from './task-view'
 import type { Task, TaskBoard } from '@/types/tasks'
 
 const task = (o: Partial<Task>): Task => ({
@@ -55,5 +55,24 @@ describe('sortTasks and groupTasks', () => {
   it('groups by person with nobody last', () => {
     const sections = groupTasks([task({ assignee_ids: [] }), task({ assignee_ids: ['r'] })], { ...DEFAULT_VIEW, groupBy: 'person' }, { boards: [] as TaskBoard[], nameById: { r: 'Raga' } })
     expect(sections.map(s => s.label)).toEqual(['Raga', 'Nobody yet'])
+  })
+})
+
+describe('sectionsByWhen', () => {
+  const t = (id: string, due: string | null, progress = 'not_started', completed_at: string | null = null) =>
+    ({ id, title: id, due_date: due, progress, completed_at, position: 0 }) as unknown as Parameters<typeof sectionsByWhen>[0][number]
+  const today = '2026-06-10'
+  it('sorts open tasks by when they are due, and folds recent done ones away', () => {
+    const s = sectionsByWhen([
+      t('late', '2026-06-01'), t('now', today), t('soon', '2026-06-15'), t('far', '2026-07-30'), t('whenever', null),
+      t('finished', '2026-06-09', 'completed', '2026-06-09T10:00:00Z'), t('old', '2026-01-01', 'completed', '2026-01-02T10:00:00Z'),
+    ], today, '2026-06-17', '2026-05-27')
+    expect(s.map(x => [x.key, x.tasks.map(y => y.id)])).toEqual([
+      ['overdue', ['late']], ['today', ['now']], ['week', ['soon']], ['later', ['far']], ['nodate', ['whenever']], ['done', ['finished']],
+    ])
+    expect(s.find(x => x.key === 'done')?.collapsedByDefault).toBe(true)
+  })
+  it('leaves out empty sections', () => {
+    expect(sectionsByWhen([t('now', today)], today, '2026-06-17', '2026-05-27').map(x => x.key)).toEqual(['today'])
   })
 })

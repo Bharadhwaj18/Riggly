@@ -84,3 +84,24 @@ export function groupTasks(tasks: Task[], v: TaskViewState, ctx: { boards: TaskB
   keys.sort((a, b) => (a ? (ctx.nameById[a] ?? 'Member') : '￿').localeCompare(b ? (ctx.nameById[b] ?? 'Member') : '￿'))
   return keys.map(k => ({ key: k || 'nobody', label: k ? (ctx.nameById[k] ?? 'Member') : 'Nobody yet', tasks: sorted.filter(t => (t.assignee_ids[0] ?? '') === k) }))
 }
+
+/**
+ * "My tasks": what's on someone's plate, by when it's due. Overdue, Today, This week (the next 7 days), Later,
+ * No date, then Done (last 14 days, folded away). Empty sections are left out.
+ */
+export function sectionsByWhen(tasks: Task[], today: string, weekEnd: string, doneSince: string): TaskSection[] {
+  const byDue = (a: Task, b: Task) => (a.due_date ?? '').localeCompare(b.due_date ?? '') || a.position - b.position
+  const open = tasks.filter(t => t.progress !== 'completed').sort(byDue)
+  const done = tasks
+    .filter(t => t.progress === 'completed' && (t.completed_at ?? '').slice(0, 10) >= doneSince)
+    .sort((a, b) => (b.completed_at ?? '').localeCompare(a.completed_at ?? ''))
+  const sections: TaskSection[] = [
+    { key: 'overdue', label: 'Overdue', tasks: open.filter(t => t.due_date && t.due_date < today) },
+    { key: 'today', label: 'Today', tasks: open.filter(t => t.due_date === today) },
+    { key: 'week', label: 'This week', tasks: open.filter(t => t.due_date && t.due_date > today && t.due_date <= weekEnd) },
+    { key: 'later', label: 'Later', tasks: open.filter(t => t.due_date && t.due_date > weekEnd) },
+    { key: 'nodate', label: 'No date', tasks: open.filter(t => !t.due_date) },
+    { key: 'done', label: 'Done', tasks: done, collapsedByDefault: true },
+  ]
+  return sections.filter(s => s.tasks.length > 0)
+}

@@ -39,7 +39,7 @@ export default async function TasksPage({ searchParams }: Props) {
 
   return (
     <TasksView
-      key={view === 'kanban' ? `kanban:${group ?? ''}` : 'list'}
+      key={view === 'kanban' ? `kanban:${group ?? ''}` : view === 'list' ? 'list' : 'mine'}
       boards={data.boards}
       buckets={data.buckets}
       tasks={data.tasks}
@@ -50,10 +50,10 @@ export default async function TasksPage({ searchParams }: Props) {
       today={todayISO()}
       currentUserId={user?.id}
       readOnly={ctx?.current.sections.tasks === 'view'}
-      view={view === 'kanban' ? 'kanban' : 'list'}
+      // Tasks opens on your own; Everyone and Board are a tap away.
+      view={view === 'kanban' ? 'kanban' : view === 'list' && mine !== '1' ? 'list' : 'mine'}
       kanbanGroupId={group}
       openTaskId={task}
-      onlyMine={mine === '1'}
       scopeToggle={canScope ? <ScopeToggle all={false} thisHref="/tasks?scope=this" allHref="/tasks" /> : undefined}
     />
   )

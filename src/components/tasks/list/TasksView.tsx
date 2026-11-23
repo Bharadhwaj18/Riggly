@@ -3,13 +3,14 @@
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ChevronDown, ChevronRight, Flag, List, ListChecks, NotebookPen, Plus, Search, SlidersHorizontal, SquareKanban } from 'lucide-react'
+import { ChevronDown, ChevronRight, Flag, ListChecks, NotebookPen, Plus, Search, SlidersHorizontal, SquareKanban, UserRound, Users } from 'lucide-react'
 import { createBoard, createTask, patchTask, type TaskPatch } from '@/actions/tasks'
 import { useToast } from '@/components/ui/Toaster'
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import { cn } from '@/lib/utils'
-import { DEFAULT_VIEW, activeFilterCount, filterTasks, groupTasks, type TaskSection, type TaskViewState } from '@/lib/task-view'
+import { DEFAULT_VIEW, activeFilterCount, filterTasks, groupTasks, sectionsByWhen, type TaskSection, type TaskViewState } from '@/lib/task-view'
+import { addDaysISO } from '@/lib/dates'
 import type { Member, Task, TaskBoard, TaskBucket, TaskField } from '@/types/tasks'
 import { CellMenu } from './CellMenu'
 import { AddColumnDialog } from './AddColumnDialog'
@@ -18,6 +19,7 @@ import { RepeatBadge } from '../RepeatBadge'
 import { TaskSheet } from './TaskSheet'
 import { DoneToggle, Faces, recentTick, shortDate, type CellContext } from './cells'
 import { KanbanPanel } from './KanbanPanel'
+import { QuickAddBar } from './QuickAddBar'
 
 interface Props {
   boards: TaskBoard[]
@@ -30,11 +32,10 @@ interface Props {
   today: string
   currentUserId?: string
   readOnly: boolean
-  view: 'list' | 'kanban'
+  /** My tasks (by when they're due), everyone's list, or the board. */
+  view: 'mine' | 'list' | 'kanban'
   kanbanGroupId?: string
   openTaskId?: string
-  /** Opened from "All my tasks": show just yours this time. */
-  onlyMine?: boolean
   /** Personal space only: the "This one | All workspaces" switch. */
   scopeToggle?: React.ReactNode
 }
@@ -79,8 +80,7 @@ export function TasksView(props: Props) {
   // Saved per device; read after the first render so the server and browser agree.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setView(v => ({ ...readJson(VIEW_KEY, DEFAULT_VIEW), query: v.query, ...(props.onlyMine ? { who: ['me'] } : {}) }))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setView(v => ({ ...readJson(VIEW_KEY, DEFAULT_VIEW), query: v.query }))
   }, [])
   const changeView = (v: TaskViewState) => {
     setView(v)
@@ -111,8 +111,16 @@ export function TasksView(props: Props) {
 
   const c: CellContext = { boards, buckets, members, nameById, avatars, today, readOnly, onPatch }
   const boardIds = useMemo(() => new Set(boards.map(b => b.id)), [boards])
-  const shown = useMemo(() => filterTasks(tasks, view, { today, userId: currentUserId, boardIds }), [tasks, view, today, currentUserId, boardIds])
-  const sections = useMemo(() => groupTasks(shown, view, { boards, nameById }), [shown, view, boards, nameById])
+  const mine = props.view === 'mine'
+  const shown = useMemo(() => {
+    if (!mine) return filterTasks(tasks, view, { today, userId: currentUserId, boardIds })
+    const q = view.query.trim().toLowerCase()
+    return tasks.filter(t => boardIds.has(t.board_id) && !!currentUserId && t.assignee_ids.includes(currentUserId) && (!q || t.title.toLowerCase().includes(q)))
+  }, [mine, tasks, view, today, currentUserId, boardIds])
+  const sections = useMemo(
+    () => (mine ? sectionsByWhen(shown, today, addDaysISO(today, 7), addDaysISO(today, -14)) : groupTasks(shown, view, { boards, nameById })),
+    [mine, shown, today, view, boards, nameById],
+  )
 
   const [filterOpen, setFilterOpen] = useState(false)
   const [fieldDialog, setFieldDialog] = useState<{ field?: TaskField } | null>(null)
@@ -122,17 +130,18 @@ export function TasksView(props: Props) {
   const isCollapsed = (s: TaskSection) => collapsed[s.key] ?? !!s.collapsedByDefault
   const openTask = openId ? tasks.find(t => t.id === openId) ?? null : null
 
-  const openCount = tasks.filter(t => t.progress !== 'completed' && boardIds.has(t.board_id)).length
-  const overdue = tasks.filter(t => t.progress !== 'completed' && t.due_date && t.due_date < today && boardIds.has(t.board_id)).length
+  const counted = mine ? shown : tasks.filter(t => boardIds.has(t.board_id))
+  const openCount = counted.filter(t => t.progress !== 'completed').length
+  const overdue = counted.filter(t => t.progress !== 'completed' && t.due_date && t.due_date < today).length
   const filters = activeFilterCount(view)
   const groupName = useMemo(() => Object.fromEntries(boards.map(b => [b.id, b.name])) as Record<string, string>, [boards])
 
   const viewTabs = (
     <div role="tablist" aria-label="View" className="flex rounded-xl bg-brand-100 p-1">
-      {([['list', 'List', List], ['kanban', 'Board', SquareKanban]] as const).map(([key, label, Icon]) => (
-        <Link key={key} role="tab" aria-selected={props.view === key} href={key === 'list' ? '/tasks?view=list' : `/tasks?view=kanban${props.kanbanGroupId ? `&group=${props.kanbanGroupId}` : ''}`}
-          className={cn('flex min-h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-extrabold transition-colors', props.view === key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900')}>
-          <Icon className="h-4 w-4" />{label}
+      {([['mine', 'Mine', UserRound], ['list', 'Everyone', Users], ['kanban', 'Board', SquareKanban]] as const).map(([key, label, Icon]) => (
+        <Link key={key} role="tab" aria-selected={props.view === key} href={key === 'mine' ? '/tasks' : key === 'list' ? '/tasks?view=list' : `/tasks?view=kanban${props.kanbanGroupId ? `&group=${props.kanbanGroupId}` : ''}`}
+          className={cn('flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm font-extrabold transition-colors sm:px-3', props.view === key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900')}>
+          <Icon className="hidden h-4 w-4 sm:block" />{label}
         </Link>
       ))}
     </div>
@@ -144,7 +153,7 @@ export function TasksView(props: Props) {
     <div className="mb-4 flex items-end justify-between gap-3">
       <div className="min-w-0">
         <h1 className="font-display text-3xl font-bold text-gray-900">Tasks</h1>
-        <p className="mt-0.5 hidden text-sm text-gray-500 sm:block">{openCount} open across {boards.length} {boards.length === 1 ? 'group' : 'groups'}{overdue > 0 && <> · <span className="font-bold text-red-600">{overdue} overdue</span></>}</p>
+        <p className="mt-0.5 hidden text-sm text-gray-500 sm:block">{mine ? `${openCount} on your plate` : `${openCount} open across ${boards.length} ${boards.length === 1 ? 'group' : 'groups'}`}{overdue > 0 && <> · <span className="font-bold text-red-600">{overdue} overdue</span></>}</p>
       </div>
       {viewTabs}
     </div>
@@ -190,32 +199,40 @@ export function TasksView(props: Props) {
     <div className="max-w-3xl">
       {header}
 
+      {!readOnly && <QuickAddBar boards={boards} members={members} currentUserId={currentUserId} today={today} />}
+
       <div className="mb-4 flex items-center gap-2">
         <div className="relative min-w-0 flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input type="search" value={view.query} onChange={e => setView({ ...view, query: e.target.value })} placeholder="Search tasks" aria-label="Search tasks"
             className="min-h-10 w-full rounded-xl border border-brand-200 bg-white pl-9 pr-3 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-400" />
         </div>
-        <FilterButton count={filters} onClick={() => setFilterOpen(true)} />
+        {!mine && <FilterButton count={filters} onClick={() => setFilterOpen(true)} />}
       </div>
 
       <div className="space-y-4">
         {sections.map(s => (
           <section key={s.key}>
-            {view.groupBy !== 'none' && (
-              <SectionHeader s={s} collapsed={isCollapsed(s)} onToggle={() => setCollapsed(prev => ({ ...prev, [s.key]: !isCollapsed(s) }))} className="px-1 pb-2 pt-1" />
+            {(mine || view.groupBy !== 'none') && (
+              <SectionHeader s={s} collapsed={isCollapsed(s)} onToggle={() => setCollapsed(prev => ({ ...prev, [s.key]: !isCollapsed(s) }))} className={cn('px-1 pb-2 pt-1', mine && s.key === 'overdue' && 'text-red-600')} />
             )}
             {!isCollapsed(s) && (
               <div className="overflow-hidden rounded-2xl border border-brand-200 bg-white">
                 {s.tasks.map(t => (
-                  <TaskRow key={t.id} task={t} c={c} groupName={view.groupBy === 'group' || boards.length < 2 ? null : groupName[t.board_id]} onOpen={() => setOpenId(t.id)} />
+                  <TaskRow key={t.id} task={t} c={c} groupName={(!mine && view.groupBy === 'group') || boards.length < 2 ? null : groupName[t.board_id]} onOpen={() => setOpenId(t.id)} />
                 ))}
-                {!readOnly && <AddTaskRow boards={boards} target={addTarget(s)} className="pl-3" />}
+                {!readOnly && !mine && <AddTaskRow boards={boards} target={addTarget(s)} className="pl-3" />}
               </div>
             )}
           </section>
         ))}
-        {shown.length === 0 && <p className="rounded-2xl border-2 border-dashed border-brand-200 px-4 py-10 text-center text-sm text-gray-500">No tasks match. Try clearing a filter.</p>}
+        {shown.length === 0 && (
+          <p className="rounded-2xl border-2 border-dashed border-brand-200 px-4 py-10 text-center text-sm text-gray-500">
+            {mine
+              ? view.query ? 'None of your tasks match.' : <>Nothing on your plate. Tasks given to you show up here; <Link href="/tasks?view=list" className="font-bold text-brand-700 hover:underline">see everyone’s</Link>.</>
+              : 'No tasks match. Try clearing a filter.'}
+          </p>
+        )}
       </div>
 
       <TaskSheet task={openTask} c={c} fields={fields} onClose={() => setOpenId(null)} onEditField={field => setFieldDialog({ field })} />
