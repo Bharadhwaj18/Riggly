@@ -1,4 +1,6 @@
 import { redirect } from 'next/navigation'
+import { DemoBanner } from '@/components/demo/DemoBanner'
+import { isDemoWorkspace } from '@/lib/demo'
 import { cookies, headers } from 'next/headers'
 import { PENDING_INVITE_COOKIE, WORKSPACE_CHOSEN_COOKIE, WORKSPACE_COOKIE } from '@/lib/workspace-shared'
 import { createClient } from '@/lib/supabase/server'
@@ -96,7 +98,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         currentWorkspaceId={currentWorkspaceId} hiddenSections={hiddenSections} />
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-5xl px-4 pb-28 pt-16 sm:px-6 lg:px-8 lg:pb-8 lg:pt-8">
-          <FinanceSettingsProvider settings={financeSettings} canApprove={!!ctx && isFinanceApprover(ctx.current)} workspaceId={currentWorkspaceId}><PageFade>{children}</PageFade><PlayerSpacer />{ctx && <QuickAddMenu allowed={{ shows: ctx.current.sections.shows === 'edit', setlists: ctx.current.sections.setlists === 'edit', finance: ctx.current.sections.finance === 'edit', calendar: ctx.current.sections.calendar === 'edit', tasks: ctx.current.sections.tasks === 'edit' }} />}{ctx?.current.sections.finance === 'edit' && <OfflineEntrySync />}</FinanceSettingsProvider>
+          <FinanceSettingsProvider settings={financeSettings} canApprove={!!ctx && isFinanceApprover(ctx.current)} workspaceId={currentWorkspaceId}>{ctx && isDemoWorkspace(ctx.current.workspace) && <DemoBanner />}<PageFade>{children}</PageFade><PlayerSpacer />{ctx && <QuickAddMenu allowed={{ shows: ctx.current.sections.shows === 'edit', setlists: ctx.current.sections.setlists === 'edit', finance: ctx.current.sections.finance === 'edit', calendar: ctx.current.sections.calendar === 'edit', tasks: ctx.current.sections.tasks === 'edit' }} />}{ctx?.current.sections.finance === 'edit' && <OfflineEntrySync />}</FinanceSettingsProvider>
         </div>
       </main>
       <TooltipLayer />

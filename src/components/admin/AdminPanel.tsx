@@ -23,6 +23,8 @@ export interface AdminWorkspace {
   ownerEmail: string | null
   members: number
   features: WorkspaceFeatures
+  /** A sample band someone is trying things in. */
+  demo: boolean
 }
 
 const card = 'rounded-2xl border border-brand-200 bg-white p-5 shadow-sm'
@@ -88,8 +90,9 @@ function WorkspaceRow({ w, core }: { w: AdminWorkspace; core: SectionKey[] }) {
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <span className="truncate text-[15px] font-bold text-gray-900">{w.name}</span>
+            {w.demo && <span className="rounded-full bg-amber-100 px-2 py-px text-[10px] font-bold text-amber-800">Demo</span>}
             {w.type === 'personal' && <span className="rounded-full bg-gray-100 px-2 py-px text-[10px] font-bold text-gray-600">Personal</span>}
-            {w.kind && <span className="rounded-full bg-brand-100 px-2 py-px text-[10px] font-bold text-brand-700">{w.kind}</span>}
+            {w.kind && !w.demo && <span className="rounded-full bg-brand-100 px-2 py-px text-[10px] font-bold text-brand-700">{w.kind}</span>}
           </span>
           <span className="mt-0.5 block truncate text-xs text-gray-500">
             {[w.ownerName, w.ownerEmail].filter(Boolean).join(' · ') || 'No owner'} · created {dateLabel(w.createdAt)}
@@ -120,15 +123,18 @@ function WorkspaceRow({ w, core }: { w: AdminWorkspace; core: SectionKey[] }) {
 export function AdminPanel({ workspaces, core }: { workspaces: AdminWorkspace[]; core: SectionKey[] }) {
   const [query, setQuery] = useState('')
   const [showPersonal, setShowPersonal] = useState(false)
+  const [showDemos, setShowDemos] = useState(false)
   const q = query.trim().toLowerCase()
   const list = workspaces
     .filter(w => showPersonal || w.type !== 'personal')
+    .filter(w => showDemos || !w.demo)
     .filter(w => !q || [w.name, w.kind ?? '', w.ownerName ?? '', w.ownerEmail ?? ''].some(t => t.toLowerCase().includes(q)))
-  const bands = workspaces.filter(w => w.type !== 'personal').length
+  const bands = workspaces.filter(w => w.type !== 'personal' && !w.demo).length
+  const demos = workspaces.filter(w => w.demo).length
 
   return (
     <div className="max-w-3xl space-y-5">
-      <PageHeader title="Admin" subtitle={`${bands} workspaces · ${workspaces.length - bands} personal spaces`} />
+      <PageHeader title="Admin" subtitle={`${bands} workspaces · ${demos} demos · ${workspaces.length - bands - demos} personal spaces`} />
 
       <CoreCard initial={core} />
 
@@ -138,6 +144,10 @@ export function AdminPanel({ workspaces, core }: { workspaces: AdminWorkspace[];
           <label className="inline-flex items-center gap-2 text-xs font-semibold text-gray-600">
             <input type="checkbox" checked={showPersonal} onChange={e => setShowPersonal(e.target.checked)} className="h-4 w-4 accent-brand-400" />
             Show personal spaces
+          </label>
+          <label className="inline-flex items-center gap-2 text-xs font-semibold text-gray-600">
+            <input type="checkbox" checked={showDemos} onChange={e => setShowDemos(e.target.checked)} className="h-4 w-4 accent-brand-400" />
+            Show demos
           </label>
         </div>
         <div className="relative">

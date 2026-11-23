@@ -28,6 +28,7 @@ export default async function AdminPage() {
     ownerEmail: w.owner_email,
     members: w.members,
     features: featuresFrom({ features: w.features }),
+    demo: w.demo === true,
   }))
 
   return <AdminPanel workspaces={workspaces} core={(settings?.core_features ?? []) as SectionKey[]} />

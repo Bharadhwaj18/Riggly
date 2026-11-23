@@ -1938,12 +1938,20 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: {
           id: string; name: string; type: string; kind: string | null; color: string; plan: string; status: string; created_at: string
-          owner_id: string; owner_name: string | null; owner_email: string | null; members: number; features: Json
+          owner_id: string; owner_name: string | null; owner_email: string | null; members: number; features: Json; demo: boolean
         }[]
       }
       admin_set_workspace_features: {
         Args: { p_workspace: string; p_features: Json }
         Returns: undefined
+      }
+      create_demo_workspace: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      reset_demo_workspace: {
+        Args: { p_ws: string }
+        Returns: string
       }
       admin_set_core_features: {
         Args: { p_sections: string[] }

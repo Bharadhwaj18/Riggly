@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Check, ChevronsUpDown, Plus, Search, Compass, Settings, User } from 'lucide-react'
+import { Check, ChevronsUpDown, Plus, Search, Compass, Settings, Sparkles, User } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { openDemo } from '@/actions/demo'
 import { cn } from '@/lib/utils'
 import { WorkspaceAvatar } from '@/components/ui/WorkspaceAvatar'
 import { todayISO } from '@/lib/shows'
@@ -34,6 +36,18 @@ export function WorkspaceSwitcher({ workspaces, currentId }: Props) {
   const [active, setActive] = useState(0)
   const searchRef = useRef<HTMLInputElement>(null)
   const close = () => { setOpen(false); setQuery(''); setActive(0) }
+  const router = useRouter()
+  const [openingDemo, setOpeningDemo] = useState(false)
+  // Your own demo band: made the first time, the same one after that.
+  const goToDemo = async () => {
+    setOpeningDemo(true)
+    const res = await openDemo()
+    setOpeningDemo(false)
+    if (res.error) { window.alert(res.error); return }
+    close()
+    router.push('/')
+    router.refresh()
+  }
   const { pending, switchTo } = useSwitchWorkspace(close)
   const current = workspaces.find(w => w.id === currentId) ?? workspaces[0]
   const today = todayISO()
@@ -155,6 +169,9 @@ export function WorkspaceSwitcher({ workspaces, currentId }: Props) {
               <Link href="/choose-workspace#join" onClick={close} className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-semibold text-gray-800 hover:bg-brand-50">
                 <Compass className="h-4 w-4 text-gray-400" /> Join with a link
               </Link>
+              <button type="button" onClick={goToDemo} disabled={openingDemo} className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm font-semibold text-gray-800 hover:bg-brand-50 disabled:opacity-60">
+                <Sparkles className="h-4 w-4 text-gray-400" /> {openingDemo ? 'Opening the demo…' : 'Try the demo band'}
+              </button>
               <Link href="/settings/workspace" onClick={close} className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-semibold text-gray-800 hover:bg-brand-50">
                 <Settings className="h-4 w-4 text-gray-400" />
                 <span className="min-w-0 flex-1 truncate">{isPersonal(current) ? 'About your personal space' : `Workspace settings for ${current.name}`}</span>

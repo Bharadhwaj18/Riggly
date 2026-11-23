@@ -5,6 +5,7 @@ import { BrandMark } from '@/components/ui/BrandMark'
 import { Wordmark } from '@/components/ui/Wordmark'
 import { useRouter } from 'next/navigation'
 import { saveDisplayName } from '@/actions/profile'
+import { openDemoForNewUser } from '@/actions/demo'
 import { Button } from '@/components/ui/Button'
 
 export function SetupForm({ email, suggestedName = '' }: { email: string; suggestedName?: string }) {
@@ -21,6 +22,8 @@ export function SetupForm({ email, suggestedName = '' }: { email: string; sugges
       if (result?.error) {
         setError(result.error)
       } else {
+        // New here: start them in their own demo band to look around. (Skipped for invites and existing bands.)
+        await openDemoForNewUser().catch(() => undefined)
         router.push('/')
       }
     })
