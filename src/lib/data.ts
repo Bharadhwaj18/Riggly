@@ -504,7 +504,7 @@ export const getCachedMerchKit = cache(async (id: string) => {
   const { data: kit } = await supabase.from('merch_kits').select('*').eq('id', id).eq('workspace_id', ctx.current.workspace.id).maybeSingle()
   if (!kit) return null
   const [lines, sales, moves, mine] = await Promise.all([
-    supabase.from('merch_kit_lines').select('*, variant:merch_variants(id, label, price, position, item:merch_items(id, name, price, position))').eq('kit_id', id),
+    supabase.from('merch_kit_lines').select('*, variant:merch_variants(id, label, price, position, item:merch_items(id, name, price, position, image_url))').eq('kit_id', id),
     supabase.from('merch_sales').select('*').eq('kit_id', id).order('created_at', { ascending: false }),
     supabase.from('merch_stock_moves').select('*').eq('kit_id', id),
     supabase.rpc('my_merch_kits', { p_ws: ctx.current.workspace.id }),

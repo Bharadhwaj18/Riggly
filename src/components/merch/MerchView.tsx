@@ -40,12 +40,14 @@ interface Props {
   canEdit: boolean
   canApprove: boolean
   userId: string
+  /** Photos upload into this workspace's folder. */
+  workspaceId: string
 }
 
 type Tab = 'stock' | 'shows' | 'activity'
 type Stats = ReturnType<typeof statsByVariant>
 
-export function MerchView({ items, variants, moves, batches, shows, sales, kits, kitLines, members, accounts, canEdit, canApprove, userId }: Props) {
+export function MerchView({ items, variants, moves, batches, shows, sales, kits, kitLines, members, accounts, canEdit, canApprove, userId, workspaceId }: Props) {
   const { money } = useMoney()
   const [tab, setTab] = useState<Tab>('stock')
   const [showArchived, setShowArchived] = useState(false)
@@ -164,7 +166,7 @@ export function MerchView({ items, variants, moves, batches, shows, sales, kits,
         onRestock={item => setRestock({ open: true, itemId: item.id })}
         onAdjust={(item, variant) => setAdjust({ open: true, item, variant })}
       />
-      <ItemModal open={itemModal.open} onOpenChange={open => setItemModal(m => ({ ...m, open }))} item={itemModal.item} />
+      <ItemModal open={itemModal.open} onOpenChange={open => setItemModal(m => ({ ...m, open }))} item={itemModal.item} workspaceId={workspaceId} />
       <VariantModal open={variantModal.open} onOpenChange={open => setVariantModal(m => ({ ...m, open }))} item={variantModal.item} variant={variantModal.variant} />
       <RestockModal open={restock.open} onOpenChange={open => setRestock(m => ({ ...m, open }))} items={activeItems} variants={variants} focusItemId={restock.itemId} />
       <AdjustModal

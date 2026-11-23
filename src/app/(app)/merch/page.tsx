@@ -32,6 +32,7 @@ export default async function MerchPage() {
       canEdit={ctx.current.sections.merch === 'edit'}
       canApprove={isMerchApprover(ctx.current)}
       userId={user?.id ?? ''}
+      workspaceId={ctx.current.workspace.id}
     />
   )
 }

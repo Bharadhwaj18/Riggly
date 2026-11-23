@@ -44,6 +44,31 @@ export interface MerchItemInput {
   kind?: string | null
   description?: string | null
   price: number
+  /** A photo uploaded to this workspace's merch-photos folder; null removes it, undefined leaves it as it is. */
+  imageUrl?: string | null
+}
+
+const PHOTO_BUCKET = 'merch-photos'
+
+/** Where a photo URL points inside the bucket, if it's one of this workspace's photos. */
+function photoPath(url: string, workspaceId: string): string | null {
+  const marker = `/storage/v1/object/public/${PHOTO_BUCKET}/`
+  const i = url.indexOf(marker)
+  if (i < 0) return null
+  const path = decodeURIComponent(url.slice(i + marker.length).split('?')[0])
+  return path.startsWith(`${workspaceId}/`) && !path.includes('..') ? path : null
+}
+
+/** Checks a photo URL belongs to this workspace. undefined: unchanged, null: removed, string: the new photo. */
+function photoValue(url: string | null | undefined, workspaceId: string): string | null | undefined | false {
+  if (url === undefined || url === null) return url
+  return photoPath(url, workspaceId) ? url : false
+}
+
+/** Deletes a replaced photo from storage. Best effort: a leftover file is harmless. */
+async function removeOldPhoto(supabase: Awaited<ReturnType<typeof createClient>>, oldUrl: string | null, workspaceId: string) {
+  const path = oldUrl ? photoPath(oldUrl, workspaceId) : null
+  if (path) await supabase.storage.from(PHOTO_BUCKET).remove([path])
 }
 
 /** A new item with its variants. `variants` is "S, M, L" text; empty makes a single "One size" variant. */
@@ -55,6 +80,8 @@ export async function createMerchItem(input: MerchItemInput & { variants: string
   const price = money(input.price) ?? 0
   if (Number.isNaN(price)) return { error: 'Enter a valid price.' }
   const workspace_id = await requireWorkspaceId()
+  const image = photoValue(input.imageUrl, workspace_id)
+  if (image === false) return { error: 'That photo didn’t upload properly. Try adding it again.' }
 
   const { count } = await supabase.from('merch_items').select('id', { count: 'exact', head: true }).eq('workspace_id', workspace_id)
   const { data: item, error } = await supabase.from('merch_items').insert({
@@ -62,6 +89,7 @@ export async function createMerchItem(input: MerchItemInput & { variants: string
     kind: clean(input.kind, 40),
     description: clean(input.description, 2000),
     position: count ?? 0,
+    image_url: image ?? null,
   }).select('id').single()
   if (error) return { error: friendly(error.message) }
 
@@ -82,10 +110,17 @@ export async function updateMerchItem(id: string, input: MerchItemInput): Promis
   if (!name) return { error: 'Give the item a name.' }
   const price = money(input.price) ?? 0
   if (Number.isNaN(price)) return { error: 'Enter a valid price.' }
+  const workspace_id = await requireWorkspaceId()
+  const image = photoValue(input.imageUrl, workspace_id)
+  if (image === false) return { error: 'That photo didn’t upload properly. Try adding it again.' }
+  const { data: before } = image !== undefined ? await supabase.from('merch_items').select('image_url').eq('id', id).maybeSingle() : { data: null }
+
   const { error } = await supabase.from('merch_items').update({
     name, price, kind: clean(input.kind, 40), description: clean(input.description, 2000),
+    ...(image !== undefined ? { image_url: image } : {}),
   }).eq('id', id)
   if (error) return { error: friendly(error.message) }
+  if (before?.image_url && before.image_url !== image) await removeOldPhoto(supabase, before.image_url, workspace_id)
   done()
   return {}
 }
@@ -110,8 +145,10 @@ export async function deleteMerchItem(id: string): Promise<Result> {
     const { count } = await supabase.from('merch_stock_moves').select('id', { count: 'exact', head: true }).in('variant_id', ids)
     if ((count ?? 0) > 0) return { error: 'This item has stock history. Archive it instead.' }
   }
+  const { data: item } = await supabase.from('merch_items').select('image_url, workspace_id').eq('id', id).maybeSingle()
   const { error } = await supabase.from('merch_items').delete().eq('id', id)
   if (error) return { error: friendly(error.message) }
+  if (item?.image_url) await removeOldPhoto(supabase, item.image_url, item.workspace_id)
   done()
   return {}
 }

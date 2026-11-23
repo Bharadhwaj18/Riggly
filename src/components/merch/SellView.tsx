@@ -21,6 +21,7 @@ import { expectedTotal, saleTakings, soldFromCount, statsByVariant, statsFor, va
 import { deleteMerchSale, recordMerchSale } from '@/actions/merch'
 import type { ShowOption } from './MerchForms'
 import { ShowSelect } from './ShowSelect'
+import { ItemHeading } from './ItemHeading'
 
 type SaleWithShow = MerchSale & { show: { id: string; title: string; show_date: string | null } | null }
 
@@ -169,7 +170,7 @@ function StallMode({ items, variants, stockOf, priceOf, onSave }: {
     <div className="space-y-4">
       {items.map(item => (
         <div key={item.id}>
-          <SectionLabel className="mb-1.5">{item.name}</SectionLabel>
+          <ItemHeading name={item.name} image={item.image_url} />
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
             {variants.filter(v => v.item_id === item.id).map(v => {
               const inCart = cart[v.id] ?? 0

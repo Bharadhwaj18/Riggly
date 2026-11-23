@@ -21,10 +21,13 @@ import { CrewPicker, type CrewPerson } from './CrewPicker'
 import { CloseKitSteps, type SaleItem } from './CloseKitSteps'
 import { AmountField } from './AmountField'
 import { ReasonButton } from '@/components/ui/ReasonButton'
+import { ItemHeading } from './ItemHeading'
 
 export interface KitLineView {
   variantId: string
   itemName: string
+  /** The item's photo, shown above its sizes at the stall. */
+  itemImage?: string | null
   label: string
   taken: number
   /** What one sells for at this show. */
@@ -278,7 +281,7 @@ function StallPanel({ kitId, lines }: { kitId: string; lines: KitLineView[] }) {
       <SectionLabel>Sell</SectionLabel>
       {byItem.map(name => (
         <div key={name}>
-          <p className="mb-1.5 text-sm font-semibold text-gray-900">{name}</p>
+          <ItemHeading name={name} image={lines.find(l => l.itemName === name)?.itemImage ?? null} />
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
             {lines.filter(l => l.itemName === name).map(l => {
               const inCart = cart[l.variantId] ?? 0

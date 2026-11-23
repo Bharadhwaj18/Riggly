@@ -14,6 +14,7 @@ import { createMerchItem, updateMerchItem, addMerchVariant, updateMerchVariant, 
 import { ADJUST_REASONS, REASON_LABELS, countFixFor, unitCostOf, type AdjustReason, type MerchItem, type MerchVariant } from '@/lib/merch'
 import { todayISO } from '@/lib/shows'
 import { ShowSelect } from './ShowSelect'
+import { MerchPhotoField, uploadMerchPhoto, type PhotoChoice } from './MerchPhotoField'
 
 export interface ShowOption { id: string; title: string; show_date: string | null; venue?: string | null }
 
@@ -51,15 +52,15 @@ function useSubmit(onDone: () => void) {
 
 // ---- Item ---------------------------------------------------------------------------------------------------------
 
-export function ItemModal({ open, onOpenChange, item }: { open: boolean; onOpenChange: (o: boolean) => void; item?: MerchItem | null }) {
+export function ItemModal({ open, onOpenChange, item, workspaceId }: { open: boolean; onOpenChange: (o: boolean) => void; item?: MerchItem | null; workspaceId: string }) {
   return (
     <Modal open={open} onOpenChange={onOpenChange} title={item ? 'Edit item' : 'New merch item'} description={item ? undefined : 'A product line, like a logo tee or a sticker pack.'}>
-      {open && <ItemForm item={item ?? null} onDone={() => onOpenChange(false)} />}
+      {open && <ItemForm item={item ?? null} workspaceId={workspaceId} onDone={() => onOpenChange(false)} />}
     </Modal>
   )
 }
 
-function ItemForm({ item, onDone }: { item: MerchItem | null; onDone: () => void }) {
+function ItemForm({ item, workspaceId, onDone }: { item: MerchItem | null; workspaceId: string; onDone: () => void }) {
   const { symbol } = useMoney()
   const { busy, run } = useSubmit(onDone)
   const [name, setName] = useState(item?.name ?? '')
@@ -67,15 +68,26 @@ function ItemForm({ item, onDone }: { item: MerchItem | null; onDone: () => void
   const [price, setPrice] = useState(item ? String(item.price) : '')
   const [variants, setVariants] = useState('')
   const [description, setDescription] = useState(item?.description ?? '')
+  const [photo, setPhoto] = useState<PhotoChoice>({ kind: 'keep', url: item?.image_url ?? null })
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    const input = { name, kind, description, price: Number(price || 0) }
-    void run(() => (item ? updateMerchItem(item.id, input) : createMerchItem({ ...input, variants })), item ? 'Item saved' : 'Item added')
+    void run(async () => {
+      // A new photo uploads first; the item only saves once it's in.
+      let imageUrl: string | null | undefined
+      if (photo.kind === 'new') {
+        const up = await uploadMerchPhoto(workspaceId, photo.file)
+        if (up.error) return { error: up.error }
+        imageUrl = up.url
+      } else if (photo.kind === 'remove') imageUrl = null
+      const input = { name, kind, description, price: Number(price || 0), imageUrl }
+      return item ? updateMerchItem(item.id, input) : createMerchItem({ ...input, variants })
+    }, item ? 'Item saved' : 'Item added')
   }
 
   return (
     <form onSubmit={submit} className="space-y-4">
+      <MerchPhotoField value={photo} onChange={setPhoto} />
       <Field label="Name" htmlFor="merch-name">
         <Input id="merch-name" value={name} onChange={e => setName(e.target.value)} placeholder="Logo tee" maxLength={80} required autoFocus />
       </Field>

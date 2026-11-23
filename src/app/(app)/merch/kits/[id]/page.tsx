@@ -6,7 +6,7 @@ import { getWorkspaceContext, isMerchApprover, merchScopeOf } from '@/lib/worksp
 import { kitSoldByVariant, variantPrice } from '@/lib/merch'
 import { KitView, type KitLineView } from '@/components/merch/KitView'
 
-type Joined = { id: string; label: string; price: number | null; position: number; item: { id: string; name: string; price: number; position: number } | { id: string; name: string; price: number; position: number }[] | null } | null
+type Joined = { id: string; label: string; price: number | null; position: number; item: { id: string; name: string; price: number; position: number; image_url?: string | null } | { id: string; name: string; price: number; position: number; image_url?: string | null }[] | null } | null
 
 export default async function MerchKitPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -29,6 +29,7 @@ export default async function MerchKitPage({ params }: { params: Promise<{ id: s
       return {
         variantId: l.variant_id,
         itemName: item?.name ?? 'Item',
+        itemImage: item?.image_url ?? null,
         label: v?.label ?? '',
         order: [item?.position ?? 0, v?.position ?? 0] as [number, number],
         taken: l.taken,
