@@ -7,6 +7,7 @@ import { getCachedFinanceSettings } from '@/lib/data'
 import { formatMoney } from '@/lib/finance/settings'
 import { sendNotification } from '@/actions/notifications'
 import { notifyLowStock } from '@/lib/merch-alerts'
+import { proofProblem } from '@/lib/merch-proofs'
 import { ADJUST_REASONS, parseVariantLabels, saleTakings, signedQty, unitCostOf, variantPrice, type AdjustReason, type SaleMode } from '@/lib/merch'
 
 type Result = { error?: string; id?: string }
@@ -311,6 +312,8 @@ export interface SaleInput {
   /** Who ran the stall or is holding the money. Defaults to whoever records it. */
   heldBy?: string | null
   notes?: string | null
+  /** Photos of the UPI payment, already uploaded. Required when any UPI money was taken. */
+  proofPaths?: string[]
 }
 
 async function moneyText(n: number) {
@@ -343,6 +346,8 @@ export async function recordMerchSale(input: SaleInput): Promise<Result> {
   if (!qtyByVariant.size && cash_amount + upi_amount + card_amount === 0) return { error: 'Add what was sold, or the money taken.' }
 
   const workspace_id = await requireWorkspaceId()
+  const proofError = proofProblem(upi_amount, input.proofPaths, workspace_id, user.id)
+  if (proofError) return { error: proofError }
   const ids = [...qtyByVariant.keys()]
   const { data: variants } = ids.length
     ? await supabase.from('merch_variants').select('id, price, item:merch_items(price)').in('id', ids).eq('workspace_id', workspace_id)
@@ -377,6 +382,15 @@ export async function recordMerchSale(input: SaleInput): Promise<Result> {
     if (mError) {
       await supabase.from('merch_sales').delete().eq('id', sale.id)
       return { error: friendly(mError.message) }
+    }
+  }
+
+  if (input.proofPaths?.length) {
+    const { error: pError } = await supabase.from('merch_payment_proofs').insert(input.proofPaths.map(file_path => ({ workspace_id, sale_id: sale.id, file_path, created_by: user.id })))
+    if (pError) {
+      await supabase.from('merch_stock_moves').delete().eq('sale_id', sale.id)
+      await supabase.from('merch_sales').delete().eq('id', sale.id)
+      return { error: /does not exist|schema cache/i.test(pError.message) ? 'UPI photos aren’t switched on yet. Run the UPI proof SQL first.' : friendly(pError.message) }
     }
   }
 

@@ -12,6 +12,7 @@ import { formatMoney } from '@/lib/finance/settings'
 import { sendNotification } from '@/actions/notifications'
 import { notifyLowStock, notifyLowStockForKit } from '@/lib/merch-alerts'
 import { kitSoldByVariant, outInKits, statsByVariant, statsFor } from '@/lib/merch'
+import { proofProblem } from '@/lib/merch-proofs'
 
 type Result = { error?: string; id?: string }
 
@@ -199,9 +200,12 @@ export async function deleteMerchKit(id: string): Promise<Result> {
 
 // ---- At the show -------------------------------------------------------------------------------------------------
 
-export async function recordKitSale(kitId: string, lines: { variantId: string; qty: number }[], paid: { cash?: number; upi?: number; card?: number }, notes?: string | null): Promise<Result> {
+export async function recordKitSale(kitId: string, lines: { variantId: string; qty: number }[], paid: { cash?: number; upi?: number; card?: number }, notes?: string | null, proofPaths: string[] = []): Promise<Result> {
   const { supabase, user } = await signedIn()
   if (!user) return { error: 'Not signed in' }
+  const workspaceId = await requireWorkspaceId()
+  const proofError = proofProblem(Number(paid.upi || 0), proofPaths, workspaceId, user.id)
+  if (proofError) return { error: proofError }
   const { data, error } = await supabase.rpc('record_kit_sale', {
     p_kit: kitId,
     p_lines: lines.map(l => ({ variant_id: l.variantId, qty: Math.trunc(Number(l.qty)) })),
@@ -209,7 +213,15 @@ export async function recordKitSale(kitId: string, lines: { variantId: string; q
     p_notes: notes ?? null,
   })
   if (error) return { error: friendly(error.message) }
-  await notifyLowStock(await requireWorkspaceId(), user.id, new Map(lines.map(l => [l.variantId, -Math.trunc(Number(l.qty))])))
+  if (proofPaths.length && data) {
+    const { error: pError } = await supabase.from('merch_payment_proofs').insert(proofPaths.map(file_path => ({ workspace_id: workspaceId, sale_id: data, file_path, created_by: user.id })))
+    if (pError) {
+      // Without its photo the sale doesn't stand: take it back off.
+      await supabase.rpc('undo_kit_sale', { p_sale: data })
+      return { error: /does not exist|schema cache/i.test(pError.message) ? 'UPI photos aren’t switched on yet. Run the UPI proof SQL first.' : friendly(pError.message) }
+    }
+  }
+  await notifyLowStock(workspaceId, user.id, new Map(lines.map(l => [l.variantId, -Math.trunc(Number(l.qty))])))
   refresh(kitId)
   return { id: data }
 }

@@ -4,7 +4,6 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ChevronLeft, Minus, Plus, Trash2 } from 'lucide-react'
-import { Button } from '@/components/ui/Button'
 import { ReasonButton } from '@/components/ui/ReasonButton'
 import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
@@ -22,6 +21,7 @@ import { deleteMerchSale, recordMerchSale } from '@/actions/merch'
 import type { ShowOption } from './MerchForms'
 import { ShowSelect } from './ShowSelect'
 import { ItemHeading } from './ItemHeading'
+import { UpiProofLink, UpiProofPicker, proofMissing, uploadProofs, type PickedProof } from './UpiProof'
 
 type SaleWithShow = MerchSale & { show: { id: string; title: string; show_date: string | null } | null }
 
@@ -35,6 +35,9 @@ interface Props {
   userId: string
   initialShowId: string
   canEdit: boolean
+  workspaceId: string
+  /** UPI payment photos for each sale this person may see. */
+  proofsBySale: Record<string, string[]>
 }
 
 type Mode = 'stall' | 'count'
@@ -45,7 +48,7 @@ const METHODS: { value: PaymentMethod; label: string }[] = [
   { value: 'card', label: 'Card' },
 ]
 
-export function SellView({ items, variants, moves, sales, shows, members, userId, initialShowId, canEdit }: Props) {
+export function SellView({ items, variants, moves, sales, shows, members, userId, initialShowId, canEdit, workspaceId, proofsBySale }: Props) {
   const { money } = useMoney()
   const router = useRouter()
   const toast = useToast()
@@ -58,6 +61,12 @@ export function SellView({ items, variants, moves, sales, shows, members, userId
   const stats = statsByVariant(moves)
   const priceOf = (v: MerchVariant) => variantPrice(items.find(i => i.id === v.item_id) ?? { price: 0 }, v)
   const showSales = sales.filter(s => (s.show_id ?? '') === showId && (showId || s.date === date))
+
+  // UPI payment photos upload first; the sale only saves once they're in.
+  const upload = async (proofs: PickedProof[]) => {
+    if (!proofs.length) return { paths: [] as string[] }
+    return uploadProofs(workspaceId, userId, proofs)
+  }
 
   const pickShow = (id: string) => {
     setShowId(id)
@@ -108,16 +117,20 @@ export function SellView({ items, variants, moves, sales, shows, members, userId
           <SegmentedTabs className="mb-4 [&>button]:leading-tight" value={mode} onChange={setMode} tabs={[{ value: 'stall', label: 'At the stall' }, { value: 'count', label: 'End-of-night count' }]} />
           {mode === 'stall'
             ? <StallMode key={`${showId}-${date}`} items={sellable} variants={variants} stockOf={id => statsFor(stats, id).stock} priceOf={priceOf}
-                onSave={async (lines, method, amount) => {
-                  const res = await recordMerchSale({ showId: showId || null, date, mode: 'stall', lines, heldBy, cash: method === 'cash' ? amount : 0, upi: method === 'upi' ? amount : 0, card: method === 'card' ? amount : 0 })
+                onSave={async (lines, method, amount, proofs) => {
+                  const up = await upload(method === 'upi' ? proofs : [])
+                  if (up.error) { toast(up.error, 'error'); return false }
+                  const res = await recordMerchSale({ showId: showId || null, date, mode: 'stall', lines, heldBy, cash: method === 'cash' ? amount : 0, upi: method === 'upi' ? amount : 0, card: method === 'card' ? amount : 0, proofPaths: up.paths })
                   if (res.error) { toast(res.error, 'error'); return false }
                   toast(`Sale recorded: ${money(amount)}`, 'success')
                   router.refresh()
                   return true
                 }} />
             : <CountMode key={`${showId}-${date}`} items={sellable} variants={variants} stockOf={id => statsFor(stats, id).stock} priceOf={priceOf}
-                onSave={async (lines, paid, notes) => {
-                  const res = await recordMerchSale({ showId: showId || null, date, mode: 'count', lines, heldBy, notes, ...paid })
+                onSave={async (lines, paid, notes, proofs) => {
+                  const up = await upload(paid.upi > 0 ? proofs : [])
+                  if (up.error) { toast(up.error, 'error'); return false }
+                  const res = await recordMerchSale({ showId: showId || null, date, mode: 'count', lines, heldBy, notes, ...paid, proofPaths: up.paths })
                   if (res.error) { toast(res.error, 'error'); return false }
                   toast('Count saved. It’s waiting for approval.', 'success')
                   router.refresh()
@@ -126,7 +139,7 @@ export function SellView({ items, variants, moves, sales, shows, members, userId
         </>
       )}
 
-      <SalesSoFar sales={showSales} members={members} userId={userId} label={show ? `Recorded for ${show.title}` : `Recorded on ${formatDateDMY(date)} (no show)`} />
+      <SalesSoFar sales={showSales} proofsBySale={proofsBySale} members={members} userId={userId} label={show ? `Recorded for ${show.title}` : `Recorded on ${formatDateDMY(date)} (no show)`} />
     </div>
   )
 }
@@ -146,10 +159,11 @@ function StallMode({ items, variants, stockOf, priceOf, onSave }: {
   variants: MerchVariant[]
   stockOf: (variantId: string) => number
   priceOf: (v: MerchVariant) => number
-  onSave: (lines: { variantId: string; qty: number }[], method: PaymentMethod, amount: number) => Promise<boolean>
+  onSave: (lines: { variantId: string; qty: number }[], method: PaymentMethod, amount: number, proofs: PickedProof[]) => Promise<boolean>
 }) {
   const { money, symbol } = useMoney()
   const [cart, setCart] = useState<Record<string, number>>({})
+  const [proofs, setProofs] = useState<PickedProof[]>([])
   const [method, setMethod] = useState<PaymentMethod>('cash')
   const [amount, setAmount] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -161,9 +175,9 @@ function StallMode({ items, variants, stockOf, priceOf, onSave }: {
 
   const save = async () => {
     setBusy(true)
-    const ok = await onSave(lines, method, paid)
+    const ok = await onSave(lines, method, paid, proofs)
     setBusy(false)
-    if (ok) { setCart({}); setAmount(null) }
+    if (ok) { setCart({}); setAmount(null); setProofs([]) }
   }
 
   return (
@@ -225,8 +239,9 @@ function StallMode({ items, variants, stockOf, priceOf, onSave }: {
                 <Label htmlFor="stall-amount" className="text-xs">Paid ({symbol})</Label>
                 <Input id="stall-amount" type="number" inputMode="decimal" min={0} step="0.01" value={amount ?? String(total)} onChange={e => setAmount(e.target.value)} />
               </div>
-              <Button onClick={save} loading={busy}>Record {money(paid)}</Button>
+              <ReasonButton onClick={save} loading={busy} blocked={method === 'upi' ? proofMissing(paid, proofs) : null}>Record {money(paid)}</ReasonButton>
             </div>
+            {method === 'upi' && <UpiProofPicker proofs={proofs} onChange={setProofs} />}
             {paid !== total && <p className="text-xs text-amber-600">{paid < total ? `${money(total - paid)} discount` : `${money(paid - total)} over the list price`}</p>}
           </div>
         )}
@@ -242,8 +257,9 @@ function CountMode({ items, variants, stockOf, priceOf, onSave }: {
   variants: MerchVariant[]
   stockOf: (variantId: string) => number
   priceOf: (v: MerchVariant) => number
-  onSave: (lines: { variantId: string; qty: number }[], paid: { cash: number; upi: number; card: number }, notes: string) => Promise<boolean>
+  onSave: (lines: { variantId: string; qty: number }[], paid: { cash: number; upi: number; card: number }, notes: string, proofs: PickedProof[]) => Promise<boolean>
 }) {
+  const [proofs, setProofs] = useState<PickedProof[]>([])
   const { money, symbol } = useMoney()
   const [counts, setCounts] = useState<Record<string, { out: string; back: string }>>({})
   const [paid, setPaid] = useState({ cash: '', upi: '', card: '' })
@@ -263,9 +279,9 @@ function CountMode({ items, variants, stockOf, priceOf, onSave }: {
 
   const save = async () => {
     setBusy(true)
-    const ok = await onSave(lines, { cash: Number(paid.cash || 0), upi: Number(paid.upi || 0), card: Number(paid.card || 0) }, notes)
+    const ok = await onSave(lines, { cash: Number(paid.cash || 0), upi: Number(paid.upi || 0), card: Number(paid.card || 0) }, notes, proofs)
     setBusy(false)
-    if (ok) { setCounts({}); setPaid({ cash: '', upi: '', card: '' }); setNotes('') }
+    if (ok) { setCounts({}); setPaid({ cash: '', upi: '', card: '' }); setNotes(''); setProofs([]) }
   }
 
   const cell = 'w-16 rounded-md border border-gray-300 bg-white px-1.5 py-1 text-right text-sm text-gray-900 focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-400'
@@ -313,6 +329,12 @@ function CountMode({ items, variants, stockOf, priceOf, onSave }: {
             </div>
           ))}
         </div>
+        {Number(paid.upi || 0) > 0 && (
+          <div className="mt-3 space-y-1.5">
+            <p className="text-xs font-semibold text-gray-700">Photos of the UPI payments</p>
+            <UpiProofPicker proofs={proofs} onChange={setProofs} multiple />
+          </div>
+        )}
         <div className="mt-3 space-y-1.5">
           <Label htmlFor="count-notes">Notes</Label>
           <Input id="count-notes" value={notes} onChange={e => setNotes(e.target.value)} maxLength={2000} placeholder="Discounts, freebies, anything odd" />
@@ -325,7 +347,7 @@ function CountMode({ items, variants, stockOf, priceOf, onSave }: {
             </p>
           </div>
           <ReasonButton onClick={save} loading={busy}
-            blocked={problems.length ? 'Some rows have more remaining than went out (marked !).' : lines.length === 0 && taken === 0 ? 'Enter what went out and what’s remaining, or the money taken.' : null}>
+            blocked={problems.length ? 'Some rows have more remaining than went out (marked !).' : lines.length === 0 && taken === 0 ? 'Enter what went out and what’s remaining, or the money taken.' : proofMissing(Number(paid.upi || 0), proofs)}>
             Save count
           </ReasonButton>
         </div>
@@ -336,7 +358,7 @@ function CountMode({ items, variants, stockOf, priceOf, onSave }: {
 
 // ---- What's been recorded so far for this show ----------------------------------------------------------------------
 
-function SalesSoFar({ sales, members, userId, label }: { sales: SaleWithShow[]; members: { id: string; name: string }[]; userId: string; label: string }) {
+function SalesSoFar({ sales, proofsBySale, members, userId, label }: { sales: SaleWithShow[]; proofsBySale: Record<string, string[]>; members: { id: string; name: string }[]; userId: string; label: string }) {
   const { money } = useMoney()
   const router = useRouter()
   const toast = useToast()
@@ -361,6 +383,7 @@ function SalesSoFar({ sales, members, userId, label }: { sales: SaleWithShow[]; 
             <div className="min-w-0 flex-1">
               <p className="font-semibold text-gray-900">{money(saleTakings(s))} <span className="font-normal text-gray-500">· {s.mode === 'count' ? 'end-of-night count' : 'stall'} · with {nameOf(s.held_by)}</span></p>
               {s.notes && <p className="truncate text-xs text-gray-500">{s.notes}</p>}
+              <UpiProofLink paths={proofsBySale[s.id] ?? []} />
             </div>
             <StatusPill tone={s.status === 'approved' ? 'green' : 'amber'}>{s.status === 'approved' ? 'In Finance' : 'Waiting'}</StatusPill>
             {s.status === 'pending' && (s.created_by === userId) && (

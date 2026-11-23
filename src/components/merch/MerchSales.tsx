@@ -18,6 +18,7 @@ import { groupSalesByShow, saleTakings, type MerchMove, type MerchSale } from '@
 import { approveMerchSales, deleteMerchSale, rejectMerchSale } from '@/actions/merch'
 import { AmountField } from './AmountField'
 import { ReasonButton } from '@/components/ui/ReasonButton'
+import { UpiProofLink } from './UpiProof'
 
 export type SaleWithShow = MerchSale & { show: { id: string; title: string; show_date: string | null } | null }
 /** `crew`: Merch crew. Named in Merch, but never picked to hold the band's money. */
@@ -42,7 +43,7 @@ function paymentLine(sales: SaleWithShow[], money: (n: number) => string) {
 /** A kit whose stall was closed and is waiting for an approver. */
 export interface ClosedKit { id: string; title: string; date: string | null; closedBy: string; money: number }
 
-export function PendingApprovals({ sales, moves, members, accounts, canApprove, userId, closedKits = [] }: {
+export function PendingApprovals({ sales, moves, members, accounts, canApprove, userId, closedKits = [], proofsBySale = {} }: {
   sales: SaleWithShow[]
   moves: MerchMove[]
   members: Person[]
@@ -50,6 +51,7 @@ export function PendingApprovals({ sales, moves, members, accounts, canApprove, 
   canApprove: boolean
   userId: string
   closedKits?: ClosedKit[]
+  proofsBySale?: Record<string, string[]>
 }) {
   const { money } = useMoney()
   const [approving, setApproving] = useState<SaleWithShow[] | null>(null)
@@ -94,7 +96,7 @@ export function PendingApprovals({ sales, moves, members, accounts, canApprove, 
                 <p className="text-sm font-bold tabular-nums text-gray-900">{money(total)}</p>
                 {canApprove && <Button size="sm" onClick={() => setApproving(g.sales)}><Check className="h-4 w-4" />Approve</Button>}
               </div>
-              <SaleRows sales={g.sales} members={members} canApprove={canApprove} userId={userId} />
+              <SaleRows sales={g.sales} members={members} canApprove={canApprove} userId={userId} proofsBySale={proofsBySale} />
             </div>
           )
         })}
@@ -104,7 +106,7 @@ export function PendingApprovals({ sales, moves, members, accounts, canApprove, 
   )
 }
 
-function SaleRows({ sales, members, canApprove, userId }: { sales: SaleWithShow[]; members: Person[]; canApprove: boolean; userId: string }) {
+function SaleRows({ sales, members, canApprove, userId, proofsBySale }: { sales: SaleWithShow[]; members: Person[]; canApprove: boolean; userId: string; proofsBySale: Record<string, string[]> }) {
   const { money } = useMoney()
   const router = useRouter()
   const toast = useToast()
@@ -133,6 +135,7 @@ function SaleRows({ sales, members, canApprove, userId }: { sales: SaleWithShow[
           <span className="min-w-0 flex-1 truncate">
             {money(saleTakings(s))} · {s.mode === 'count' ? 'count' : 'stall'} · recorded by {nameOf(s.created_by)}, money with {nameOf(s.held_by)}{s.notes ? ` · ${s.notes}` : ''}
           </span>
+          <UpiProofLink paths={proofsBySale[s.id] ?? []} />
           {(canApprove || s.created_by === userId) && (
             <button type="button" onClick={() => act(s)} aria-label={canApprove ? 'Turn this sale down' : 'Delete this sale'} title={canApprove ? 'Turn down' : 'Delete'}
               className="rounded-md p-1 text-gray-500 hover:bg-brand-100 hover:text-gray-900">

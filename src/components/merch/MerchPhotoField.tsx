@@ -12,14 +12,14 @@ const MAX_BYTES = 15 * 1024 * 1024
 /** What the photo field holds: the saved URL, a new picture waiting to upload, or nothing. */
 export type PhotoChoice = { kind: 'keep'; url: string | null } | { kind: 'new'; file: File; preview: string } | { kind: 'remove' }
 
-/** Shrinks a picture to at most 1200px on its longest side and re-encodes it as WebP (or JPEG where WebP isn't available). */
-async function shrink(file: File): Promise<{ blob: Blob; type: string } | null> {
+/** Shrinks a picture to at most `maxSide` px on its longest side and re-encodes it as WebP (or JPEG where WebP isn't available). */
+export async function shrink(file: File, maxSide = MAX_SIDE): Promise<{ blob: Blob; type: string } | null> {
   const url = URL.createObjectURL(file)
   try {
     const img = new Image()
     img.src = url
     await img.decode()
-    const scale = Math.min(1, MAX_SIDE / Math.max(img.naturalWidth, img.naturalHeight))
+    const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight))
     const canvas = document.createElement('canvas')
     canvas.width = Math.round(img.naturalWidth * scale)
     canvas.height = Math.round(img.naturalHeight * scale)

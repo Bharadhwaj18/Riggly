@@ -114,6 +114,33 @@ export type Database = {
         }
         Relationships: []
       }
+      merch_payment_proofs: {
+        Row: {
+          id: string
+          workspace_id: string
+          sale_id: string
+          file_path: string
+          created_by: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          workspace_id: string
+          sale_id: string
+          file_path: string
+          created_by?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          workspace_id?: string
+          sale_id?: string
+          file_path?: string
+          created_by?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
       song_duplicate_links: {
         Row: {
           workspace_id: string

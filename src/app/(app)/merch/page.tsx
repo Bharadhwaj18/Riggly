@@ -33,6 +33,7 @@ export default async function MerchPage() {
       canApprove={isMerchApprover(ctx.current)}
       userId={user?.id ?? ''}
       workspaceId={ctx.current.workspace.id}
+      proofsBySale={merch.proofsBySale}
     />
   )
 }

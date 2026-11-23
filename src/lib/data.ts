@@ -471,10 +471,10 @@ export const getCachedFinanceRequests = cache(() =>
 // restock batches, and sales. Stock is summed from the log on the page, so this is the whole picture in four reads.
 export const getCachedMerch = cache(async () => {
   const ctx = await getWorkspaceContext()
-  if (!ctx) return { items: [], variants: [], moves: [], batches: [], sales: [], kits: [], kitLines: [] }
+  if (!ctx) return { items: [], variants: [], moves: [], batches: [], sales: [], kits: [], kitLines: [], proofsBySale: {} as Record<string, string[]> }
   const supabase = await createClient()
   const ws = ctx.current.workspace.id
-  const [items, variants, moves, batches, sales, kits, kitLines] = await Promise.all([
+  const [items, variants, moves, batches, sales, kits, kitLines, proofs] = await Promise.all([
     supabase.from('merch_items').select('*').eq('workspace_id', ws).order('position').order('created_at'),
     supabase.from('merch_variants').select('*').eq('workspace_id', ws).order('position').order('created_at'),
     supabase.from('merch_stock_moves').select('*, show:shows(id, title, show_date)').eq('workspace_id', ws).order('date', { ascending: false }).order('created_at', { ascending: false }),
@@ -482,8 +482,11 @@ export const getCachedMerch = cache(async () => {
     supabase.from('merch_sales').select('*, show:shows(id, title, show_date)').eq('workspace_id', ws).order('date', { ascending: false }).order('created_at', { ascending: false }),
     supabase.from('merch_kits').select('*, show:shows(id, title, show_date, venue)').eq('workspace_id', ws).order('created_at', { ascending: false }),
     supabase.from('merch_kit_lines').select('*').eq('workspace_id', ws),
+    supabase.from('merch_payment_proofs').select('sale_id, file_path').eq('workspace_id', ws).order('created_at'),
   ])
-  return { items: items.data ?? [], variants: variants.data ?? [], moves: moves.data ?? [], batches: batches.data ?? [], sales: sales.data ?? [], kits: kits.data ?? [], kitLines: kitLines.data ?? [] }
+  const proofsBySale: Record<string, string[]> = {}
+  for (const p of proofs.data ?? []) (proofsBySale[p.sale_id] ??= []).push(p.file_path)
+  return { items: items.data ?? [], variants: variants.data ?? [], moves: moves.data ?? [], batches: batches.data ?? [], sales: sales.data ?? [], kits: kits.data ?? [], kitLines: kitLines.data ?? [], proofsBySale }
 })
 
 // The signed-in member's own show kits (what Merch crew see), with the show's name, date and venue.

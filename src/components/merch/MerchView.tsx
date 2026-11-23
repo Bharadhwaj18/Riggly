@@ -42,12 +42,14 @@ interface Props {
   userId: string
   /** Photos upload into this workspace's folder. */
   workspaceId: string
+  /** UPI payment photos for each sale this person may see. */
+  proofsBySale: Record<string, string[]>
 }
 
 type Tab = 'stock' | 'shows' | 'activity'
 type Stats = ReturnType<typeof statsByVariant>
 
-export function MerchView({ items, variants, moves, batches, shows, sales, kits, kitLines, members, accounts, canEdit, canApprove, userId, workspaceId }: Props) {
+export function MerchView({ items, variants, moves, batches, shows, sales, kits, kitLines, members, accounts, canEdit, canApprove, userId, workspaceId, proofsBySale }: Props) {
   const { money } = useMoney()
   const [tab, setTab] = useState<Tab>('stock')
   const [showArchived, setShowArchived] = useState(false)
@@ -113,7 +115,7 @@ export function MerchView({ items, variants, moves, batches, shows, sales, kits,
         <>
           {nextShow && <NextShowCard show={nextShow} kit={nextKit} canApprove={canApprove} leadName={nextKit ? nameOf(nextKit.lead_id) : null} />}
 
-          <PendingApprovals sales={sales.filter(s => !s.kit_id)} moves={moves} members={members} accounts={accounts} canApprove={canApprove} userId={userId} closedKits={closedKits} />
+          <PendingApprovals sales={sales.filter(s => !s.kit_id)} moves={moves} members={members} accounts={accounts} canApprove={canApprove} userId={userId} closedKits={closedKits} proofsBySale={proofsBySale} />
 
           <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Tile label="In stock" value={`${totals.stock}`} sub={`worth ${money(totals.stockValue)} at cost`} />

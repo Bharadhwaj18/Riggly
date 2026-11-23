@@ -5,6 +5,7 @@ import { crewPickerPeople } from '@/lib/merch-people'
 import { getWorkspaceContext, isMerchApprover, merchScopeOf } from '@/lib/workspace'
 import { kitSoldByVariant, variantPrice } from '@/lib/merch'
 import { KitView, type KitLineView } from '@/components/merch/KitView'
+import { createClient } from '@/lib/supabase/server'
 
 type Joined = { id: string; label: string; price: number | null; position: number; item: { id: string; name: string; price: number; position: number; image_url?: string | null } | { id: string; name: string; price: number; position: number; image_url?: string | null }[] | null } | null
 
@@ -20,6 +21,13 @@ export default async function MerchKitPage({ params }: { params: Promise<{ id: s
   ])
   if (!data || !user) notFound()
   const { kit, show, sales, moves } = data
+
+  // UPI payment photos for this kit's sales; row-level security only returns the ones this person may see.
+  const { data: proofRows } = sales.length
+    ? await (await createClient()).from('merch_payment_proofs').select('sale_id, file_path').in('sale_id', sales.map(s => s.id)).order('created_at')
+    : { data: [] }
+  const proofsBySale: Record<string, string[]> = {}
+  for (const p of proofRows ?? []) (proofsBySale[p.sale_id] ??= []).push(p.file_path)
 
   const sold = kitSoldByVariant(kit.id, moves)
   const lines: KitLineView[] = data.lines
@@ -61,6 +69,8 @@ export default async function MerchKitPage({ params }: { params: Promise<{ id: s
         })]))}
       people={{ lead: kit.lead_id ? nameOf(kit.lead_id) : null, helpers: kit.helper_ids.map(nameOf), nameOf: Object.fromEntries(profiles.map(p => [p.id, nameOf(p.id)])) }}
       userId={user.id}
+      workspaceId={ctx.current.workspace.id}
+      proofsBySale={proofsBySale}
       can={{ sell: onKit || canEdit, pack: approver, approve: approver, fullView: scope === 'full' }}
       members={profiles.filter(p => !crewIds.includes(p.id)).map(p => ({ id: p.id, name: nameOf(p.id) }))}
       crewPeople={approver ? crewPickerPeople(profiles.map(p => ({ id: p.id, name: nameOf(p.id) })), crewIds) : []}

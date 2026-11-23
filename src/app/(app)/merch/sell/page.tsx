@@ -25,6 +25,8 @@ export default async function MerchSellPage({ searchParams }: { searchParams: Pr
       userId={user?.id ?? ''}
       initialShowId={shows.some(s => s.id === show) ? show! : ''}
       canEdit={ctx?.current.sections.merch === 'edit'}
+      workspaceId={ctx?.current.workspace.id ?? ''}
+      proofsBySale={merch.proofsBySale}
     />
   )
 }

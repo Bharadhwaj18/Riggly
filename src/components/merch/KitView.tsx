@@ -22,6 +22,7 @@ import { CloseKitSteps, type SaleItem } from './CloseKitSteps'
 import { AmountField } from './AmountField'
 import { ReasonButton } from '@/components/ui/ReasonButton'
 import { ItemHeading } from './ItemHeading'
+import { UpiProofLink, UpiProofPicker, proofMissing, uploadProofs, type PickedProof } from './UpiProof'
 
 export interface KitLineView {
   variantId: string
@@ -52,6 +53,9 @@ interface Props {
   /** Everyone, for changing the crew (Merch crew first). Empty for people who can't change it. */
   crewPeople: CrewPerson[]
   accounts: { id: string; name: string }[]
+  workspaceId: string
+  /** UPI payment photos for each sale this person may see. */
+  proofsBySale: Record<string, string[]>
 }
 
 const METHODS: { value: PaymentMethod; label: string }[] = [
@@ -73,7 +77,7 @@ function useRun() {
   }
 }
 
-export function KitView({ kit, show, lines, sales, saleItems, people, userId, can, members, crewPeople, accounts }: Props) {
+export function KitView({ kit, show, lines, sales, saleItems, people, userId, can, members, crewPeople, accounts, workspaceId, proofsBySale }: Props) {
   const { money } = useMoney()
   const router = useRouter()
   const run = useRun()
@@ -165,7 +169,7 @@ export function KitView({ kit, show, lines, sales, saleItems, people, userId, ca
 
       {status === 'open' && can.sell && (
         <>
-          <StallPanel kitId={kit.id} lines={lines} />
+          <StallPanel kitId={kit.id} lines={lines} workspaceId={workspaceId} userId={userId} />
           <div className="mt-4 flex justify-end">
             <Button variant="secondary" onClick={() => setClosing(true)}><Check className="h-4 w-4" />End of night: close the kit</Button>
           </div>
@@ -208,6 +212,7 @@ export function KitView({ kit, show, lines, sales, saleItems, people, userId, ca
                 <span className="min-w-0 flex-1 text-gray-900">
                   {money(saleTakings(s))}
                   <span className="text-gray-500"> · {Number(s.cash_amount) ? 'cash' : Number(s.upi_amount) ? 'UPI' : Number(s.card_amount) ? 'card' : 'free'} · {new Date(s.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}{can.fullView ? ` · ${people.nameOf[s.created_by] ?? 'Member'}` : ''}</span>
+                  <UpiProofLink paths={proofsBySale[s.id] ?? []} />
                 </span>
                 {status === 'open' && (s.created_by === userId || can.pack) && (
                   <button type="button" aria-label="Undo this sale" title="Undo" onClick={() => { if (confirm('Undo this sale? The items go back in the box.')) void run(() => undoKitSale(s.id, kit.id), 'Sale undone') }}
@@ -253,7 +258,7 @@ export function KitView({ kit, show, lines, sales, saleItems, people, userId, ca
 
 // ---- Selling from the kit ---------------------------------------------------------------------------------------------
 
-function StallPanel({ kitId, lines }: { kitId: string; lines: KitLineView[] }) {
+function StallPanel({ kitId, lines, workspaceId, userId }: { kitId: string; lines: KitLineView[]; workspaceId: string; userId: string }) {
   const { money, symbol } = useMoney()
   const run = useRun()
   const toast = useToast()
@@ -261,6 +266,7 @@ function StallPanel({ kitId, lines }: { kitId: string; lines: KitLineView[] }) {
   const [method, setMethod] = useState<PaymentMethod>('cash')
   const [amount, setAmount] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [proofs, setProofs] = useState<PickedProof[]>([])
 
   const picked = lines.filter(l => (cart[l.variantId] ?? 0) > 0)
   const total = expectedTotal(picked.map(l => ({ qty: cart[l.variantId], price: l.price })))
@@ -269,9 +275,12 @@ function StallPanel({ kitId, lines }: { kitId: string; lines: KitLineView[] }) {
 
   const save = async () => {
     setBusy(true)
-    const ok = await run(() => recordKitSale(kitId, picked.map(l => ({ variantId: l.variantId, qty: cart[l.variantId] })), { [method]: paid }), `Sale recorded: ${money(paid)}`)
+    // A UPI sale's photo uploads first; the sale only saves once it's in.
+    const up = method === 'upi' ? await uploadProofs(workspaceId, userId, proofs) : { paths: [] as string[] }
+    if (up.error) { toast(up.error, 'error'); setBusy(false); return }
+    const ok = await run(() => recordKitSale(kitId, picked.map(l => ({ variantId: l.variantId, qty: cart[l.variantId] })), { [method]: paid }, null, up.paths ?? []), `Sale recorded: ${money(paid)}`)
     setBusy(false)
-    if (ok) { setCart({}); setAmount(null) }
+    if (ok) { setCart({}); setAmount(null); setProofs([]) }
   }
 
   const byItem = [...new Set(lines.map(l => l.itemName))]
@@ -330,8 +339,9 @@ function StallPanel({ kitId, lines }: { kitId: string; lines: KitLineView[] }) {
                 <Label htmlFor="kit-amount" className="text-xs">Paid ({symbol})</Label>
                 <Input id="kit-amount" type="number" inputMode="decimal" min={0} step="0.01" value={amount ?? String(total)} onChange={e => setAmount(e.target.value)} />
               </div>
-              <Button onClick={save} loading={busy}>Record {money(paid)}</Button>
+              <ReasonButton onClick={save} loading={busy} blocked={method === 'upi' ? proofMissing(paid, proofs) : null}>Record {money(paid)}</ReasonButton>
             </div>
+            {method === 'upi' && <UpiProofPicker proofs={proofs} onChange={setProofs} />}
             {paid !== total && <p className="text-xs text-amber-600">{paid < total ? `${money(total - paid)} discount` : `${money(paid - total)} over the show price`}</p>}
           </div>
         )}
