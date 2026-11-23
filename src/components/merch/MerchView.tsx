@@ -9,20 +9,20 @@ import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Modal } from '@/components/ui/Modal'
 import { SegmentedTabs, Chip } from '@/components/ui/Chip'
-import { SectionLabel } from '@/components/ui/SectionLabel'
 import { StatusPill, type PillTone } from '@/components/ui/StatusPill'
 import { useToast } from '@/components/ui/Toaster'
 import { useMoney } from '@/components/finance/FinanceSettingsContext'
 import { cn } from '@/lib/utils'
 import { formatDateDMY } from '@/lib/dates'
 import { isUpcoming, todayISO } from '@/lib/shows'
-import { REASON_LABELS, isLowStock, isMoveReason, outInKits, statsByVariant, statsFor, sumStats, variantPrice, type MerchBatch, type MerchItem, type MerchKitLine, type MerchMove, type MerchVariant } from '@/lib/merch'
+import { isLowStock, outInKits, statsByVariant, statsFor, sumStats, variantPrice, type MerchBatch, type MerchItem, type MerchKitLine, type MerchMove, type MerchVariant } from '@/lib/merch'
 import { buildMerchTimeline, type TimelineStatus } from '@/lib/merch-timeline'
-import { deleteMerchBatch, deleteMerchItem, deleteMerchMove, setMerchItemArchived, setMerchVariantArchived } from '@/actions/merch'
+import { deleteMerchItem, setMerchItemArchived, setMerchVariantArchived } from '@/actions/merch'
 import { AdjustModal, ItemModal, RestockModal, VariantModal, type ShowOption } from './MerchForms'
 import { PendingApprovals, type AccountOption, type Person, type SaleWithShow } from './MerchSales'
 import { type KitWithShow } from './Kits'
 import { MerchReports } from './MerchReports'
+import { MerchLedger } from './MerchLedger'
 
 type MoveWithShow = MerchMove & { show: { id: string; title: string; show_date: string | null } | null }
 
@@ -124,7 +124,7 @@ export function MerchView({ items, variants, moves, batches, shows, sales, kits,
             <Tile label="Takings" value={money(totals.revenue)} sub="all time" />
           </div>
 
-          <SegmentedTabs className="mb-4" value={tab} onChange={setTab} tabs={[{ value: 'stock', label: 'Stock' }, { value: 'shows', label: 'Shows' }, { value: 'activity', label: 'Activity' }]} />
+          <SegmentedTabs className="mb-4" value={tab} onChange={setTab} tabs={[{ value: 'stock', label: 'Stock' }, { value: 'shows', label: 'Shows' }, { value: 'activity', label: 'History' }]} />
 
           {tab === 'stock' ? (
             <div className="space-y-4">
@@ -150,7 +150,7 @@ export function MerchView({ items, variants, moves, batches, shows, sales, kits,
           ) : tab === 'shows' ? (
             <ShowsTab kits={kits} moves={moves} sales={sales} items={items} variants={variants} />
           ) : (
-            <History moves={moves} items={items} variants={variants} batches={batches} canEdit={canEdit} />
+            <MerchLedger items={items} variants={variants} moves={moves} sales={sales} batches={batches} kits={kits} members={members} proofsBySale={proofsBySale} canEdit={canEdit} canApprove={canApprove} userId={userId} />
           )}
         </>
       )}
@@ -415,14 +415,6 @@ function SmallAction({ onClick, children }: { onClick: () => void; children: Rea
   )
 }
 
-function IconButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button type="button" onClick={onClick} aria-label={label} title={label} className="rounded-md p-1.5 text-gray-500 transition-colors hover:bg-brand-100 hover:text-gray-900">
-      {children}
-    </button>
-  )
-}
-
 // ---- Shows timeline -----------------------------------------------------------------------------------------------
 
 const STATUS_PILL: Record<TimelineStatus, { tone: PillTone; label: string }> = {
@@ -474,95 +466,6 @@ function ShowsTab({ kits, moves, sales, items, variants }: { kits: KitWithShow[]
           })}
         </ol>
       )}
-    </div>
-  )
-}
-
-// ---- Activity -----------------------------------------------------------------------------------------------------
-
-type HistoryRow =
-  | { kind: 'batch'; key: string; date: string; created: string; batch: MerchBatch; moves: MoveWithShow[] }
-  | { kind: 'move'; key: string; date: string; created: string; move: MoveWithShow }
-
-function History({ moves, items, variants, batches, canEdit }: { moves: MoveWithShow[]; items: MerchItem[]; variants: MerchVariant[]; batches: MerchBatch[]; canEdit: boolean }) {
-  const { money } = useMoney()
-  const quick = useQuickAction()
-
-  const nameOf = useMemo(() => {
-    const itemById = new Map(items.map(i => [i.id, i]))
-    const map = new Map(variants.map(v => [v.id, { item: itemById.get(v.item_id)?.name ?? 'Item', variant: v.label }]))
-    return (variantId: string) => map.get(variantId) ?? { item: 'Removed item', variant: '' }
-  }, [items, variants])
-
-  // A restock shows as one row with its lines; everything else is one row per move.
-  const rows = useMemo<HistoryRow[]>(() => {
-    const byBatch = new Map<string, MoveWithShow[]>()
-    const out: HistoryRow[] = []
-    for (const m of moves) {
-      if (m.batch_id) byBatch.set(m.batch_id, [...(byBatch.get(m.batch_id) ?? []), m])
-      else out.push({ kind: 'move', key: m.id, date: m.date, created: m.created_at, move: m })
-    }
-    for (const b of batches) out.push({ kind: 'batch', key: b.id, date: b.date, created: b.created_at, batch: b, moves: byBatch.get(b.id) ?? [] })
-    return out.sort((a, b) => (a.date === b.date ? b.created.localeCompare(a.created) : b.date.localeCompare(a.date)))
-  }, [moves, batches])
-
-  if (!rows.length) return <p className="py-6 text-center text-sm text-gray-500">Nothing logged yet. Restocks, sales and adjustments show up here.</p>
-
-  return (
-    <div className="space-y-1">
-      {rows.map((row, i) => {
-        const header = row.date !== rows[i - 1]?.date ? <SectionLabel className="pb-1 pt-3">{formatDateDMY(row.date)}</SectionLabel> : null
-        if (row.kind === 'batch') {
-          const units = row.moves.reduce((n, m) => n + m.qty, 0)
-          return (
-            <div key={row.key}>
-              {header}
-              <div className="flex items-start gap-3 rounded-xl border border-brand-100 bg-white px-3 py-2.5">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-gray-900">Restock{row.batch.supplier ? ` from ${row.batch.supplier}` : ''}</p>
-                  <p className="text-xs text-gray-500">
-                    {row.moves.map(m => { const n = nameOf(m.variant_id); return `${n.item} ${n.variant} ×${m.qty}` }).join(', ')}
-                  </p>
-                  {row.batch.notes && <p className="mt-0.5 text-xs text-gray-500">{row.batch.notes}</p>}
-                </div>
-                <div className="shrink-0 text-right">
-                  <p className="text-sm font-semibold tabular-nums text-brand-400 dark:text-emerald-400">+{units}</p>
-                  {Number(row.batch.total_cost) > 0 && <p className="text-xs tabular-nums text-gray-500">{money(Number(row.batch.total_cost))}</p>}
-                </div>
-                {canEdit && (
-                  <IconButton label="Delete restock" onClick={() => { if (confirm('Delete this restock and the stock it added?')) void quick(() => deleteMerchBatch(row.batch.id), 'Restock deleted') }}>
-                    <Trash2 className="h-4 w-4" />
-                  </IconButton>
-                )}
-              </div>
-            </div>
-          )
-        }
-        const m = row.move
-        const n = nameOf(m.variant_id)
-        const reason = isMoveReason(m.reason) ? REASON_LABELS[m.reason] : m.reason
-        return (
-          <div key={row.key}>
-            {header}
-            <div className="flex items-start gap-3 rounded-xl border border-brand-100 bg-white px-3 py-2.5">
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-gray-900">{reason} · {n.item} {n.variant}</p>
-                <p className="text-xs text-gray-500">
-                  {[m.show ? `at ${m.show.title}` : null, m.unit_price != null ? `${money(Number(m.unit_price))} each` : null, m.note].filter(Boolean).join(' · ') || ' '}
-                </p>
-              </div>
-              <p className={cn('shrink-0 text-sm font-semibold tabular-nums', m.qty > 0 ? 'text-brand-400 dark:text-emerald-400' : 'text-red-700')}>
-                {m.qty > 0 ? `+${m.qty}` : `−${Math.abs(m.qty)}`}
-              </p>
-              {canEdit && !m.sale_id && (
-                <IconButton label="Undo this entry" onClick={() => { if (confirm('Undo this stock entry?')) void quick(() => deleteMerchMove(m.id), 'Entry removed') }}>
-                  <Trash2 className="h-4 w-4" />
-                </IconButton>
-              )}
-            </div>
-          </div>
-        )
-      })}
     </div>
   )
 }

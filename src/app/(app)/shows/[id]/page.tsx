@@ -237,8 +237,11 @@ export default async function ShowDetailPage({ params }: Props) {
                 {!merchKit && canPackKit && (
                   <Button size="sm" asChild><Link href={`/merch/kits/new?show=${id}`}><Plus className="h-4 w-4" /> Pack a merch kit</Link></Button>
                 )}
-                {merchLevel === 'edit' && (
-                  <Button size="sm" variant={!merchKit && canPackKit ? 'secondary' : 'primary'} asChild><Link href={`/merch/sell?show=${id}`}><Plus className="h-4 w-4" /> Sell merch</Link></Button>
+                {merchKit?.status === 'open' && (
+                  <Button size="sm" asChild><Link href={`/merch/kits/${merchKit.id}`}><Plus className="h-4 w-4" /> Open the stall</Link></Button>
+                )}
+                {!merchKit && !canPackKit && merchLevel === 'edit' && (
+                  <p className="text-xs text-gray-500">Merch at this show sells through a kit. Ask an admin or someone with the Merch role to pack one.</p>
                 )}
                 {(merchSales ?? []).length > 0 && (
                   <Button size="sm" variant="secondary" asChild><Link href="/merch">Open Merch</Link></Button>

@@ -2053,6 +2053,10 @@ export type Database = {
         Args: { p_workspace: string; p_features: Json }
         Returns: undefined
       }
+      delete_merch_sale: {
+        Args: { p_sale: string }
+        Returns: undefined
+      }
       merge_songs: {
         Args: { p_keep: string; p_drop: string }
         Returns: undefined

@@ -213,7 +213,7 @@ export function SalesByShow({ sales, moves }: { sales: SaleWithShow[]; moves: Me
   const groups = groupSalesByShow(sales).filter(g => !query.trim() || groupTitle(g.sales).toLowerCase().includes(query.trim().toLowerCase()))
 
   if (!sales.length) {
-    return <p className="py-6 text-center text-sm text-gray-500">No sales yet. Use <Link href="/merch/sell" className="font-semibold text-brand-400 hover:underline">Sell</Link> at a show.</p>
+    return <p className="py-6 text-center text-sm text-gray-500">No sales yet. Pack a kit for a show, or use <Link href="/merch/sell" className="font-semibold text-brand-400 hover:underline">Sell</Link> for sales outside a show.</p>
   }
 
   return (

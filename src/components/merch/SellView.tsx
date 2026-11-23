@@ -18,8 +18,6 @@ import { formatDateDMY } from '@/lib/dates'
 import { todayISO } from '@/lib/shows'
 import { expectedTotal, saleTakings, soldFromCount, statsByVariant, statsFor, variantPrice, type MerchItem, type MerchMove, type MerchSale, type MerchVariant, type PaymentMethod } from '@/lib/merch'
 import { deleteMerchSale, recordMerchSale } from '@/actions/merch'
-import type { ShowOption } from './MerchForms'
-import { ShowSelect } from './ShowSelect'
 import { ItemHeading } from './ItemHeading'
 import { UpiProofLink, UpiProofPicker, proofMissing, uploadProofs, type PickedProof } from './UpiProof'
 
@@ -30,10 +28,10 @@ interface Props {
   variants: MerchVariant[]
   moves: MerchMove[]
   sales: SaleWithShow[]
-  shows: ShowOption[]
   members: { id: string; name: string }[]
   userId: string
-  initialShowId: string
+  /** Set when someone came here to sell at a show that has no kit yet: that show's name. */
+  showWithoutKit?: string | null
   canEdit: boolean
   workspaceId: string
   /** UPI payment photos for each sale this person may see. */
@@ -48,30 +46,23 @@ const METHODS: { value: PaymentMethod; label: string }[] = [
   { value: 'card', label: 'Card' },
 ]
 
-export function SellView({ items, variants, moves, sales, shows, members, userId, initialShowId, canEdit, workspaceId, proofsBySale }: Props) {
+export function SellView({ items, variants, moves, sales, members, userId, showWithoutKit, canEdit, workspaceId, proofsBySale }: Props) {
   const { money } = useMoney()
   const router = useRouter()
   const toast = useToast()
-  const [showId, setShowId] = useState(initialShowId)
-  const show = shows.find(s => s.id === showId) ?? null
-  const [date, setDate] = useState(show?.show_date ?? todayISO())
+  const [date, setDate] = useState(todayISO())
   const [mode, setMode] = useState<Mode>('stall')
   const [heldBy, setHeldBy] = useState(userId)
 
   const stats = statsByVariant(moves)
   const priceOf = (v: MerchVariant) => variantPrice(items.find(i => i.id === v.item_id) ?? { price: 0 }, v)
-  const showSales = sales.filter(s => (s.show_id ?? '') === showId && (showId || s.date === date))
+  // Only sales that weren't at a show, on this date.
+  const daySales = sales.filter(s => !s.show_id && !s.kit_id && s.date === date)
 
   // UPI payment photos upload first; the sale only saves once they're in.
   const upload = async (proofs: PickedProof[]) => {
     if (!proofs.length) return { paths: [] as string[] }
     return uploadProofs(workspaceId, userId, proofs)
-  }
-
-  const pickShow = (id: string) => {
-    setShowId(id)
-    const s = shows.find(x => x.id === id)
-    if (s?.show_date) setDate(s.show_date)
   }
 
   if (!canEdit) {
@@ -88,14 +79,16 @@ export function SellView({ items, variants, moves, sales, shows, members, userId
   return (
     <div className="max-w-2xl pb-10">
       <BackLink />
-      <h1 className="mb-1 text-3xl font-bold text-gray-900">Sell merch</h1>
-      <p className="mb-5 text-sm text-gray-500">Stock comes off straight away. The money waits for an approver before it goes into Finance.</p>
+      <h1 className="mb-1 text-3xl font-bold text-gray-900">Sell outside a show</h1>
+      <p className="mb-5 text-sm text-gray-500">For merch sold away from a gig, like online orders or to friends. At a show, sell from that show’s kit so the stall, the count and the money stay together. Stock comes off straight away; the money waits for an approver before it goes into Finance.</p>
 
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-[1fr_10rem_10rem]">
-        <div className="space-y-1.5">
-          <Label htmlFor="sell-show">Show</Label>
-          <ShowSelect id="sell-show" shows={shows} value={showId} onChange={pickShow} noneLabel="Not at a show" />
+      {showWithoutKit && (
+        <div role="note" className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <strong>{showWithoutKit}</strong> has no merch kit yet. Sales at a show go through its kit, so ask an admin or someone with the Merch role to pack one. Anything you record here isn’t tied to that show.
         </div>
+      )}
+
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-[10rem_12rem]">
         <div className="space-y-1.5">
           <Label htmlFor="sell-date">Date</Label>
           <Input id="sell-date" type="date" value={date} onChange={e => setDate(e.target.value)} />
@@ -116,21 +109,21 @@ export function SellView({ items, variants, moves, sales, shows, members, userId
         <>
           <SegmentedTabs className="mb-4 [&>button]:leading-tight" value={mode} onChange={setMode} tabs={[{ value: 'stall', label: 'At the stall' }, { value: 'count', label: 'End-of-night count' }]} />
           {mode === 'stall'
-            ? <StallMode key={`${showId}-${date}`} items={sellable} variants={variants} stockOf={id => statsFor(stats, id).stock} priceOf={priceOf}
+            ? <StallMode key={date} items={sellable} variants={variants} stockOf={id => statsFor(stats, id).stock} priceOf={priceOf}
                 onSave={async (lines, method, amount, proofs) => {
                   const up = await upload(method === 'upi' ? proofs : [])
                   if (up.error) { toast(up.error, 'error'); return false }
-                  const res = await recordMerchSale({ showId: showId || null, date, mode: 'stall', lines, heldBy, cash: method === 'cash' ? amount : 0, upi: method === 'upi' ? amount : 0, card: method === 'card' ? amount : 0, proofPaths: up.paths })
+                  const res = await recordMerchSale({ showId: null, date, mode: 'stall', lines, heldBy, cash: method === 'cash' ? amount : 0, upi: method === 'upi' ? amount : 0, card: method === 'card' ? amount : 0, proofPaths: up.paths })
                   if (res.error) { toast(res.error, 'error'); return false }
                   toast(`Sale recorded: ${money(amount)}`, 'success')
                   router.refresh()
                   return true
                 }} />
-            : <CountMode key={`${showId}-${date}`} items={sellable} variants={variants} stockOf={id => statsFor(stats, id).stock} priceOf={priceOf}
+            : <CountMode key={date} items={sellable} variants={variants} stockOf={id => statsFor(stats, id).stock} priceOf={priceOf}
                 onSave={async (lines, paid, notes, proofs) => {
                   const up = await upload(paid.upi > 0 ? proofs : [])
                   if (up.error) { toast(up.error, 'error'); return false }
-                  const res = await recordMerchSale({ showId: showId || null, date, mode: 'count', lines, heldBy, notes, ...paid, proofPaths: up.paths })
+                  const res = await recordMerchSale({ showId: null, date, mode: 'count', lines, heldBy, notes, ...paid, proofPaths: up.paths })
                   if (res.error) { toast(res.error, 'error'); return false }
                   toast('Count saved. It’s waiting for approval.', 'success')
                   router.refresh()
@@ -139,7 +132,7 @@ export function SellView({ items, variants, moves, sales, shows, members, userId
         </>
       )}
 
-      <SalesSoFar sales={showSales} proofsBySale={proofsBySale} members={members} userId={userId} label={show ? `Recorded for ${show.title}` : `Recorded on ${formatDateDMY(date)} (no show)`} />
+      <SalesSoFar sales={daySales} proofsBySale={proofsBySale} members={members} userId={userId} label={`Recorded on ${formatDateDMY(date)}`} />
     </div>
   )
 }

@@ -357,6 +357,8 @@ export async function recordMerchSale(input: SaleInput): Promise<Result> {
   if (input.showId) {
     const { data: show } = await supabase.from('shows').select('id').eq('id', input.showId).eq('workspace_id', workspace_id).maybeSingle()
     if (!show) return { error: 'That show is no longer there.' }
+    const { data: kit } = await supabase.from('merch_kits').select('id').eq('show_id', input.showId).maybeSingle()
+    if (kit) return { error: 'That show has a merch kit. Sell from the kit instead.' }
   }
 
   let held_by = input.heldBy || user.id
@@ -415,17 +417,26 @@ export async function recordMerchSale(input: SaleInput): Promise<Result> {
   return { id: sale.id }
 }
 
-/** Deletes a pending sale (it was a mistake), putting its stock back. */
+/**
+ * Deletes a sale: its stock goes back, and if its money was already approved it comes off the Finance entry.
+ * Approvers can delete any sale; others only their own that's still waiting (the database checks this).
+ */
 export async function deleteMerchSale(id: string): Promise<Result> {
   const { supabase, user } = await signedIn()
   if (!user) return { error: 'Not signed in' }
-  const { data: sale } = await supabase.from('merch_sales').select('status, show_id').eq('id', id).maybeSingle()
+  const [{ data: sale }, { data: proofs }] = await Promise.all([
+    supabase.from('merch_sales').select('show_id, kit_id').eq('id', id).maybeSingle(),
+    supabase.from('merch_payment_proofs').select('file_path').eq('sale_id', id),
+  ])
   if (!sale) return { error: 'That sale is already gone.' }
-  if (sale.status !== 'pending') return { error: 'This sale is approved and in Finance, so it can’t be deleted here.' }
-  const { error } = await supabase.from('merch_sales').delete().eq('id', id)
-  if (error) return { error: friendly(error.message) }
+  const { error } = await supabase.rpc('delete_merch_sale', { p_sale: id })
+  if (error) return { error: /delete_merch_sale/.test(error.message) ? 'Deleting sales isn’t switched on yet. Run the delete merch sale SQL first.' : friendly(error.message) }
+  // The payment photos go with the sale. Best effort: a leftover private file is harmless.
+  if (proofs?.length) await supabase.storage.from('merch-payment-proofs').remove(proofs.map(p => p.file_path))
   done()
+  revalidatePath('/finance')
   if (sale.show_id) revalidatePath(`/shows/${sale.show_id}`)
+  if (sale.kit_id) revalidatePath(`/merch/kits/${sale.kit_id}`)
   return {}
 }
 
