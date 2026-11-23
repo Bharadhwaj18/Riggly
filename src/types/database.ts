@@ -114,6 +114,30 @@ export type Database = {
         }
         Relationships: []
       }
+      song_duplicate_links: {
+        Row: {
+          workspace_id: string
+          song_a: string
+          song_b: string
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          workspace_id: string
+          song_a: string
+          song_b: string
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          workspace_id?: string
+          song_a?: string
+          song_b?: string
+          created_by?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       song_not_duplicates: {
         Row: {
           workspace_id: string

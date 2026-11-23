@@ -77,15 +77,16 @@ export const pairKey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${
 
 /**
  * Groups of songs that look like copies of each other. A pair someone said isn't a duplicate (`notDuplicates`,
- * as pairKey strings) doesn't link two songs, though they can still end up together through a third.
+ * as pairKey strings) doesn't link two songs, though they can still end up together through a third. A pair someone
+ * marked as a duplicate by hand (`linked`) always does, whatever the titles look like.
  */
-export function duplicateGroups<T extends SongLike>(songs: T[], notDuplicates: Set<string> = new Set()): T[][] {
+export function duplicateGroups<T extends SongLike>(songs: T[], notDuplicates: Set<string> = new Set(), linked: Set<string> = new Set()): T[][] {
   const parent = songs.map((_, i) => i)
   const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])))
   for (let i = 0; i < songs.length; i++) {
     for (let j = i + 1; j < songs.length; j++) {
-      if (notDuplicates.has(pairKey(songs[i].id, songs[j].id))) continue
-      if (matchTitles(songs[i].title, songs[j].title)) parent[find(j)] = find(i)
+      const pair = pairKey(songs[i].id, songs[j].id)
+      if (linked.has(pair) || (!notDuplicates.has(pair) && matchTitles(songs[i].title, songs[j].title))) parent[find(j)] = find(i)
     }
   }
   const groups = new Map<number, T[]>()

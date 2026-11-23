@@ -173,6 +173,33 @@ export async function markNotDuplicates(songIds: string[]): Promise<{ error?: st
 
   const { error } = await supabase.from('song_not_duplicates').upsert(rows, { onConflict: 'song_a,song_b', ignoreDuplicates: true })
   if (error) return { error: error.message }
+  // Saying they're different songs also undoes any hand-made link between them.
+  for (const row of rows) await supabase.from('song_duplicate_links').delete().eq('song_a', row.song_a).eq('song_b', row.song_b)
+
+  revalidatePath('/songs')
+  revalidatePath('/songs/duplicates')
+  return {}
+}
+
+/** Marks songs as copies of each other by hand, so they show up together on the duplicates page to be merged. */
+export async function linkDuplicates(songIds: string[]): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+  const ids = [...new Set(songIds)]
+  if (ids.length < 2) return { error: 'Pick at least two songs.' }
+
+  const workspace_id = await requireWorkspaceId()
+  // Every song is tied to the first one, which puts them all in one group.
+  const rows = ids.slice(1).map(id => {
+    const [song_a, song_b] = pairKey(ids[0], id).split('|')
+    return { workspace_id, song_a, song_b, created_by: user.id }
+  })
+  const { error } = await supabase.from('song_duplicate_links').upsert(rows, { onConflict: 'song_a,song_b', ignoreDuplicates: true })
+  if (error) return { error: error.message }
+
+  // If any of these pairs were earlier marked "different songs", that's been overruled.
+  for (const row of rows) await supabase.from('song_not_duplicates').delete().eq('song_a', row.song_a).eq('song_b', row.song_b)
 
   revalidatePath('/songs')
   revalidatePath('/songs/duplicates')

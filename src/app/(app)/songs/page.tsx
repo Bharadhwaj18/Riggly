@@ -1,8 +1,7 @@
 import Link from 'next/link'
 import { sectionGuard } from '@/lib/section-guard'
 import { Plus, Music2, Copy } from 'lucide-react'
-import { createClient } from '@/lib/supabase/server'
-import { duplicateGroups, pairKey } from '@/lib/song-match'
+import { getDuplicateGroups } from '@/lib/duplicates'
 import { getCachedSongs, getCachedSetlistSongCounts, getCachedReferenceRows } from '@/lib/data'
 import { coverLinksBySong, firstReferenceBySong, type PlayableSong } from '@/lib/song-references'
 import { SongSearchList } from '@/components/songs/SongSearchList'
@@ -13,12 +12,8 @@ import { EmptyState } from '@/components/ui/EmptyState'
 export default async function SongsPage() {
   const denied = await sectionGuard('songs')
   if (denied) return denied
-  const supabase = await createClient()
-  const [songs, usage, referenceRows, dismissed] = await Promise.all([
-    getCachedSongs(), getCachedSetlistSongCounts(), getCachedReferenceRows(),
-    supabase.from('song_not_duplicates').select('song_a, song_b'),
-  ])
-  const duplicates = duplicateGroups(songs, new Set((dismissed.data ?? []).map(r => pairKey(r.song_a, r.song_b)))).length
+  const [songs, usage, referenceRows] = await Promise.all([getCachedSongs(), getCachedSetlistSongCounts(), getCachedReferenceRows()])
+  const duplicates = (await getDuplicateGroups(songs)).length
 
   const setlistCounts: Record<string, number> = {}
   for (const row of usage) setlistCounts[row.song_id] = (setlistCounts[row.song_id] ?? 0) + 1

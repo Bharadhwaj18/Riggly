@@ -69,6 +69,11 @@ describe('duplicateGroups', () => {
     expect(groups).toHaveLength(1)
     expect(groups[0].map(s => s.id)).toEqual(['a', 'b', 'c'])
   })
+  it('always groups songs marked as duplicates, whatever their titles', () => {
+    const g = duplicateGroups([{ id: 'x', title: 'Aigiri' }, { id: 'y', title: 'Mahishasura Mardini' }], new Set(), new Set([pairKey('x', 'y')]))
+    expect(g).toHaveLength(1)
+    expect(g[0].map(s => s.id)).toEqual(['x', 'y'])
+  })
   it('drops a group once every pair in it was marked not the same', () => {
     const pairs = new Set([pairKey('a', 'b'), pairKey('a', 'c'), pairKey('b', 'c')])
     expect(duplicateGroups(songs, pairs)).toHaveLength(0)

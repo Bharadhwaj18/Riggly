@@ -3,30 +3,25 @@ import { ChevronLeft, Sparkles } from 'lucide-react'
 import { sectionGuard } from '@/lib/section-guard'
 import { getWorkspaceContext } from '@/lib/workspace'
 import { getCachedSongs, getCachedSetlistSongCounts } from '@/lib/data'
-import { createClient } from '@/lib/supabase/server'
-import { duplicateGroups, pairKey } from '@/lib/song-match'
+import { getDuplicateGroups } from '@/lib/duplicates'
 import { DuplicateGroups, type DuplicateSong } from '@/components/songs/DuplicateGroups'
+import { MarkDuplicates } from '@/components/songs/MarkDuplicates'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { EmptyState } from '@/components/ui/EmptyState'
 
 export default async function DuplicateSongsPage() {
   const denied = await sectionGuard('songs')
   if (denied) return denied
-  const supabase = await createClient()
-  const [ctx, songs, usage, dismissed] = await Promise.all([
-    getWorkspaceContext(),
-    getCachedSongs(),
-    getCachedSetlistSongCounts(),
-    supabase.from('song_not_duplicates').select('song_a, song_b'),
-  ])
+  const [ctx, songs, usage] = await Promise.all([getWorkspaceContext(), getCachedSongs(), getCachedSetlistSongCounts()])
 
   const setlistCounts: Record<string, number> = {}
   for (const row of usage) setlistCounts[row.song_id] = (setlistCounts[row.song_id] ?? 0) + 1
 
-  const notDuplicates = new Set((dismissed.data ?? []).map(r => pairKey(r.song_a, r.song_b)))
-  const groups: DuplicateSong[][] = duplicateGroups(songs, notDuplicates).map(g =>
-    g.map(s => ({ id: s.id, title: s.title, artist: s.artist, song_key: s.song_key, hasChart: !!s.chord_chart?.trim(), setlists: setlistCounts[s.id] ?? 0 }))
-  )
+  const canEdit = ctx?.current.sections.songs === 'edit'
+  const toRow = (s: (typeof songs)[number]): DuplicateSong => ({
+    id: s.id, title: s.title, artist: s.artist, song_key: s.song_key, hasChart: !!s.chord_chart?.trim(), setlists: setlistCounts[s.id] ?? 0,
+  })
+  const groups = (await getDuplicateGroups(songs)).map(g => g.map(toRow))
 
   return (
     <div>
@@ -36,16 +31,17 @@ export default async function DuplicateSongsPage() {
       <PageHeader
         title="Possible duplicates"
         subtitle={groups.length ? `${groups.length} ${groups.length === 1 ? 'song looks' : 'songs look'} like it’s in your list more than once` : undefined}
+        action={canEdit ? <MarkDuplicates songs={songs.map(toRow)} /> : undefined}
       />
       {groups.length ? (
         <>
           <p className="mb-4 text-sm text-gray-600">
-            These have the same title or one spelled a little differently. Pick the one to keep: its setlists, notes and links stay, and anything it’s missing (like a chord chart) is filled in from the others.
+            These have the same title, a spelling that looks alike, or you marked them yourself. Pick the one to keep: its setlists, notes and links stay, and anything it’s missing (like a chord chart) is filled in from the others.
           </p>
-          <DuplicateGroups groups={groups} canEdit={ctx?.current.sections.songs === 'edit'} />
+          <DuplicateGroups groups={groups} canEdit={canEdit} />
         </>
       ) : (
-        <EmptyState icon={<Sparkles className="h-12 w-12" />} title="No duplicates" description="Every song in your list looks different from the others." />
+        <EmptyState icon={<Sparkles className="h-12 w-12" />} title="No duplicates" description="Every song in your list looks different from the others. If two are really the same song, mark them yourself." />
       )}
     </div>
   )
