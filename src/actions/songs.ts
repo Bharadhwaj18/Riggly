@@ -6,11 +6,12 @@ import { createClient } from '@/lib/supabase/server'
 import { requireWorkspaceId } from '@/lib/workspace'
 import { songDetailsSchema, type SongFormData, type SongDetailsData } from '@/lib/validators'
 import { addSongReference } from '@/actions/song-references'
+import { cleanTitle, pairKey } from '@/lib/song-match'
 
 /** Just the song's own columns from the form (the link and cover are handled separately). */
 function songColumns(data: SongFormData) {
   const { title, artist, song_key, bpm, time_signature, chord_chart, notes } = data
-  return { title, artist, song_key, bpm: bpm ?? null, time_signature, chord_chart, notes }
+  return { title: cleanTitle(title), artist, song_key, bpm: bpm ?? null, time_signature, chord_chart, notes }
 }
 
 export async function createSong(data: SongFormData) {
@@ -136,5 +137,43 @@ export async function deleteSong(id: string): Promise<{ error?: string }> {
   if (error) return { error: error.message }
 
   revalidatePath('/songs')
+  return {}
+}
+
+/** Folds a duplicate into the song you're keeping: setlists, links, notes and recordings move over, blanks are filled in. */
+export async function mergeSongs(keepId: string, dropId: string): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const { error } = await supabase.rpc('merge_songs', { p_keep: keepId, p_drop: dropId })
+  if (error) return { error: error.message }
+
+  revalidatePath('/songs')
+  revalidatePath('/setlists')
+  return {}
+}
+
+/** Marks these songs as different songs that just look alike, so they stop being suggested as duplicates. */
+export async function markNotDuplicates(songIds: string[]): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const workspace_id = await requireWorkspaceId()
+  const rows: { workspace_id: string; song_a: string; song_b: string; created_by: string }[] = []
+  for (let i = 0; i < songIds.length; i++) {
+    for (let j = i + 1; j < songIds.length; j++) {
+      const [song_a, song_b] = pairKey(songIds[i], songIds[j]).split('|')
+      rows.push({ workspace_id, song_a, song_b, created_by: user.id })
+    }
+  }
+  if (!rows.length) return {}
+
+  const { error } = await supabase.from('song_not_duplicates').upsert(rows, { onConflict: 'song_a,song_b', ignoreDuplicates: true })
+  if (error) return { error: error.message }
+
+  revalidatePath('/songs')
+  revalidatePath('/songs/duplicates')
   return {}
 }

@@ -8,6 +8,7 @@ import { sendNotificationToAll } from '@/actions/notifications'
 import { formatDateDMY } from '@/lib/dates'
 import type { SetlistFormData } from '@/lib/validators'
 import type { ParsedSong } from '@/lib/setlist-parser'
+import { cleanTitle, normalizeTitle } from '@/lib/song-match'
 
 export async function createSetlist(data: SetlistFormData) {
   const supabase = await createClient()
@@ -136,11 +137,19 @@ export async function bulkImportSongs(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
 
-  // Fetch all existing songs to match by title (case-insensitive)
-  const { data: existingSongs } = await supabase.from('songs').select('id, title').eq('workspace_id', await requireWorkspaceId())
-  const songMap = new Map(
-    (existingSongs ?? []).map(s => [s.title.toLowerCase().trim(), s.id])
-  )
+  // Fetch all existing songs to match by title, ignoring case, spacing, punctuation and invisible characters.
+  // If a title is in the library twice, the copy that has a chord chart wins.
+  const { data: existingSongs } = await supabase.from('songs').select('id, title, chord_chart').eq('workspace_id', await requireWorkspaceId())
+  const songMap = new Map<string, string>()
+  const mapHasChart = new Set<string>()
+  for (const s of existingSongs ?? []) {
+    const key = normalizeTitle(s.title)
+    const hasChart = !!s.chord_chart?.trim()
+    if (!songMap.has(key) || (hasChart && !mapHasChart.has(key))) {
+      songMap.set(key, s.id)
+      if (hasChart) mapHasChart.add(key)
+    }
+  }
 
   // Fetch existing setlist entries to know current max position and skip duplicates
   const { data: currentEntries } = await supabase
@@ -155,7 +164,7 @@ export async function bulkImportSongs(
   let imported = 0
 
   for (const parsed of parsedSongs) {
-    const key = parsed.title.toLowerCase().trim()
+    const key = normalizeTitle(parsed.title)
     let songId = songMap.get(key) ?? preResolvedIds[key]
 
     // Create the song if it doesn't exist
@@ -163,7 +172,7 @@ export async function bulkImportSongs(
       const { data: newSong, error } = await supabase
         .from('songs')
         .insert({
-          title: parsed.title,
+          title: cleanTitle(parsed.title),
           song_key: parsed.song_key ?? null,
           created_by: user.id,
           workspace_id: await requireWorkspaceId(),
@@ -208,14 +217,23 @@ export async function quickCreateSongAndAdd(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
 
-  const trimmed = title.trim()
+  const trimmed = cleanTitle(title)
   if (!trimmed) return { error: 'Title is required' }
+  const workspaceId = await requireWorkspaceId()
 
-  const { data: newSong, error: createError } = await supabase
-    .from('songs')
-    .insert({ title: trimmed, created_by: user.id, workspace_id: await requireWorkspaceId(), })
-    .select('id, title, artist, song_key')
-    .single()
+  // The same title is already in the library (ignoring case and spacing): use that song instead of making a twin.
+  const { data: sameTitle } = await supabase.from('songs').select('id, title, artist, song_key, chord_chart').eq('workspace_id', workspaceId)
+  const copies = (sameTitle ?? []).filter(s => normalizeTitle(s.title) === normalizeTitle(trimmed))
+  const found = copies.find(s => s.chord_chart?.trim()) ?? copies[0]
+
+  const { data: created, error: createError } = found
+    ? { data: { id: found.id, title: found.title, artist: found.artist, song_key: found.song_key }, error: null }
+    : await supabase
+        .from('songs')
+        .insert({ title: trimmed, created_by: user.id, workspace_id: workspaceId })
+        .select('id, title, artist, song_key')
+        .single()
+  const newSong = created
 
   if (createError || !newSong) return { error: createError?.message ?? 'Failed to create song' }
 

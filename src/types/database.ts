@@ -87,6 +87,30 @@ export type Database = {
         }
         Relationships: []
       }
+      song_not_duplicates: {
+        Row: {
+          workspace_id: string
+          song_a: string
+          song_b: string
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          workspace_id: string
+          song_a: string
+          song_b: string
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          workspace_id?: string
+          song_a?: string
+          song_b?: string
+          created_by?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       song_group_notes: {
         Row: {
           id: string
@@ -1943,6 +1967,10 @@ export type Database = {
       }
       admin_set_workspace_features: {
         Args: { p_workspace: string; p_features: Json }
+        Returns: undefined
+      }
+      merge_songs: {
+        Args: { p_keep: string; p_drop: string }
         Returns: undefined
       }
       create_demo_workspace: {

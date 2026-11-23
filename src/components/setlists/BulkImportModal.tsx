@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { parseSetlistText, type ParsedSong } from '@/lib/setlist-parser'
 import { bulkImportSongs } from '@/actions/setlists'
 import { similarity, FUZZY_THRESHOLD } from '@/lib/fuzzy'
+import { findSimilar, normalizeTitle } from '@/lib/song-match'
 import { useToast } from '@/components/ui/Toaster'
 import { cn } from '@/lib/utils'
 import type { Song } from '@/types'
@@ -36,17 +37,17 @@ export function BulkImportModal({ setlistId, existingSongs, currentSongTitles }:
   const toast = useToast()
 
   const existingTitleSet = useMemo(
-    () => new Set(existingSongs.map(s => s.title.toLowerCase().trim())),
+    () => new Set(existingSongs.map(s => normalizeTitle(s.title))),
     [existingSongs]
   )
   const currentTitleSet = useMemo(
-    () => new Set(currentSongTitles.map(t => t.toLowerCase().trim())),
+    () => new Set(currentSongTitles.map(t => normalizeTitle(t))),
     [currentSongTitles]
   )
   // Every song already in this setlist is by definition also in the
   // library, so this can be derived from existingSongs without a new prop.
   const currentSongsInLibrary = useMemo(
-    () => existingSongs.filter(s => currentTitleSet.has(s.title.toLowerCase().trim())),
+    () => existingSongs.filter(s => currentTitleSet.has(normalizeTitle(s.title))),
     [existingSongs, currentTitleSet]
   )
 
@@ -65,11 +66,11 @@ export function BulkImportModal({ setlistId, existingSongs, currentSongTitles }:
   }, [parsed])
 
   const newSongCount = parsed.filter(
-    s => !existingTitleSet.has(s.title.toLowerCase().trim())
+    s => !existingTitleSet.has(normalizeTitle(s.title))
   ).length
 
   const alreadyInSetlistCount = parsed.filter(
-    s => currentTitleSet.has(s.title.toLowerCase().trim())
+    s => currentTitleSet.has(normalizeTitle(s.title))
   ).length
 
   function reset() {
@@ -94,7 +95,7 @@ export function BulkImportModal({ setlistId, existingSongs, currentSongTitles }:
   function handleImportClick() {
     const newUnmatched: Unmatched[] = []
     for (const song of parsed) {
-      const key = song.title.toLowerCase().trim()
+      const key = normalizeTitle(song.title)
       if (currentTitleSet.has(key)) continue // already in setlist, will be skipped
       if (!existingTitleSet.has(key)) {
         newUnmatched.push({ parsedTitle: song.title, parsedKey: song.song_key })
@@ -106,9 +107,16 @@ export function BulkImportModal({ setlistId, existingSongs, currentSongTitles }:
     }
     // Pre-fill each search input with the parsed title
     const initQueries: Record<string, string> = {}
-    for (const u of newUnmatched) initQueries[u.parsedTitle] = u.parsedTitle
+    // A song that sounds like one already in the library starts out matched to it (a person can change that).
+    const guessed: Record<string, string | undefined> = {}
+    for (const u of newUnmatched) {
+      initQueries[u.parsedTitle] = u.parsedTitle
+      const best = findSimilar(u.parsedTitle, existingSongs).sort((a, b) => Number(!!b.song.chord_chart) - Number(!!a.song.chord_chart))[0]
+      if (best) guessed[u.parsedTitle] = best.song.id
+    }
     setUnmatched(newUnmatched)
     setQueries(initQueries)
+    setResolutions(guessed)
     setStep('resolve')
   }
 
@@ -116,7 +124,7 @@ export function BulkImportModal({ setlistId, existingSongs, currentSongTitles }:
     startTransition(async () => {
       const preResolvedIds: Record<string, string> = {}
       for (const [title, songId] of Object.entries(finalResolutions)) {
-        if (songId) preResolvedIds[title.toLowerCase().trim()] = songId
+        if (songId) preResolvedIds[normalizeTitle(title)] = songId
       }
       try {
         const { imported, created } = await bulkImportSongs(setlistId, parsed, preResolvedIds)
@@ -148,7 +156,7 @@ export function BulkImportModal({ setlistId, existingSongs, currentSongTitles }:
         description={
           step === 'input'
             ? 'Paste a setlist, numbered or not. Songs are auto-created in the library if they don\'t exist.'
-            : 'Search your library for each song, or leave blank to create a new entry.'
+            : 'Songs that look like ones you already have are matched for you. Check each one, change it, or choose to create a new song.'
         }
         className="max-w-2xl"
       >
@@ -211,7 +219,7 @@ export function BulkImportModal({ setlistId, existingSongs, currentSongTitles }:
                       </p>
                       <div className="space-y-1">
                         {songs.map((song, i) => {
-                          const key = song.title.toLowerCase().trim()
+                          const key = normalizeTitle(song.title)
                           const isNew = !existingTitleSet.has(key)
                           const inSetlist = currentTitleSet.has(key)
                           return (

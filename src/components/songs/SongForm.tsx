@@ -16,12 +16,16 @@ import { ChordPreview } from './ChordPreview'
 import { DeleteSongButton } from './DeleteSongButton'
 import { MUSICAL_KEYS, TIME_SIGNATURES } from '@/lib/utils'
 import type { Song } from '@/types'
-import { useRef, useTransition } from 'react'
+import { useMemo, useRef, useTransition } from 'react'
+import { AlertTriangle } from 'lucide-react'
+import { findSimilar } from '@/lib/song-match'
 import { StartFromLink } from '@/components/references/StartFromLink'
 import type { ReferenceDetails } from '@/lib/reference-lookup'
 
 interface SongFormProps {
   song?: Song
+  /** Songs already in the library, so a new song can warn about copies of itself. */
+  existing?: { id: string; title: string; artist: string | null; hasChart: boolean }[]
   onSubmit: (data: SongFormData) => Promise<void>
   title: string
   backHref: string
@@ -31,7 +35,7 @@ interface SongFormProps {
 const selectClass =
   'mt-1 w-full rounded-md border border-brand-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-400'
 
-export function SongForm({ song, onSubmit, title, backHref, backLabel }: SongFormProps) {
+export function SongForm({ song, existing, onSubmit, title, backHref, backLabel }: SongFormProps) {
   const [isPending, startTransition] = useTransition()
 
   const { register, handleSubmit, control, setValue, getValues, formState: { errors } } = useForm<SongFormData>({
@@ -47,6 +51,8 @@ export function SongForm({ song, onSubmit, title, backHref, backLabel }: SongFor
     },
   })
   const chart = useWatch({ control, name: 'chord_chart' }) ?? ''
+  const typedTitle = useWatch({ control, name: 'title' }) ?? ''
+  const copies = useMemo(() => (existing ? findSimilar(typedTitle, existing, song?.id) : []), [existing, typedTitle, song?.id])
 
   // What a pasted link last filled in, so a different link can replace it but never overwrite typed text.
   const filled = useRef<{ title?: string; artist?: string }>({})
@@ -62,6 +68,8 @@ export function SongForm({ song, onSubmit, title, backHref, backLabel }: SongFor
   }
 
   const handleFormSubmit = (data: SongFormData) => {
+    const same = copies.find(c => c.kind === 'same')
+    if (same && !window.confirm('“' + same.song.title + '” is already in your songs. Create another one anyway?')) return
     startTransition(async () => {
       await onSubmit(data)
     })
@@ -98,6 +106,21 @@ export function SongForm({ song, onSubmit, title, backHref, backLabel }: SongFor
         <div className="col-span-2 sm:col-span-3">
           <Label htmlFor="title">Title *</Label>
           <Input id="title" className="mt-1" error={errors.title?.message} {...register('title')} />
+          {copies.length > 0 && (
+            <div role="status" className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              <p className="flex items-center gap-1.5 font-semibold"><AlertTriangle className="h-3.5 w-3.5" /> Already in your songs</p>
+              <ul className="mt-1 space-y-1">
+                {copies.slice(0, 4).map(({ song: c, kind }) => (
+                  <li key={c.id} className="flex flex-wrap items-center gap-x-2">
+                    <Link href={'/songs/' + c.id} target="_blank" className="font-bold underline underline-offset-2">{c.title}</Link>
+                    <span>{kind === 'same' ? 'same title' : 'spelled differently'}</span>
+                    <span>{c.hasChart ? 'has a chord chart' : 'no chord chart yet'}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1">If it’s the same song, open it instead of adding another.</p>
+            </div>
+          )}
         </div>
         <div className="col-span-2 sm:col-span-3">
           <Label htmlFor="artist">Artist</Label>
