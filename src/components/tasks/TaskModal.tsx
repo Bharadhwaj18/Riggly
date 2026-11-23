@@ -14,13 +14,12 @@ import { cn } from '@/lib/utils'
 import {
   LABEL_COLORS, PRIORITY_LABELS, PROGRESS_LABELS, RECURRENCE_LABELS, REMINDER_PRESETS,
   TASK_PRIORITIES, TASK_PROGRESS, TASK_RECURRENCE, labelStyle,
-  type LabelColor, type Member, type TaskBucket, type TaskLabel, type TaskPriority, type TaskProgress, type TaskRecurrence, type Task,
+  type LabelColor, type Member, type TaskLabel, type TaskPriority, type TaskProgress, type TaskRecurrence, type Task,
 } from '@/types/tasks'
 import { Select } from '@/components/ui/Select'
 
 interface Props {
   task: Task
-  buckets: TaskBucket[]
   labels: TaskLabel[]
   members: Member[]
   onClose: () => void
@@ -51,7 +50,7 @@ function initialFields(task: Task) {
 }
 
 /** Mount with a `key` of the task id so the form always starts from that task. */
-export function TaskModal({ task, buckets, labels, members, onClose }: Props) {
+export function TaskModal({ task, labels, members, onClose }: Props) {
   const [fields, setFields] = useState(() => initialFields(task))
   const [newItem, setNewItem] = useState('')
   const [newLabel, setNewLabel] = useState('')
@@ -139,15 +138,9 @@ export function TaskModal({ task, buckets, labels, members, onClose }: Props) {
           <Input id="task-title" className="mt-1" value={fields.title} onChange={e => set('title', e.target.value)} />
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <Label htmlFor="task-bucket">Bucket</Label>
-            <Select id="task-bucket" className={selectClass} value={fields.bucketId} onChange={e => set('bucketId', e.target.value)}>
-              {buckets.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-            </Select>
-          </div>
-          <div>
-            <Label htmlFor="task-progress">Progress</Label>
+            <Label htmlFor="task-progress">Status</Label>
             <Select id="task-progress" className={selectClass} value={fields.progress} onChange={e => set('progress', e.target.value as TaskProgress)}>
               {TASK_PROGRESS.map(p => <option key={p} value={p}>{PROGRESS_LABELS[p]}</option>)}
             </Select>
@@ -193,7 +186,7 @@ export function TaskModal({ task, buckets, labels, members, onClose }: Props) {
             </div>
             {fields.recurrence && (
               <p className="col-span-2 text-xs text-gray-500">
-                When this is marked completed, the next {RECURRENCE_LABELS[fields.recurrence].toLowerCase()} copy is created in the board&apos;s first bucket.
+                When this is marked completed, the next {RECURRENCE_LABELS[fields.recurrence].toLowerCase()} copy is created as To do.
               </p>
             )}
           </div>

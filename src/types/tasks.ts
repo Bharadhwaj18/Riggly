@@ -49,8 +49,8 @@ export const TASK_PROGRESS = ['not_started', 'in_progress', 'completed'] as cons
 export type TaskProgress = (typeof TASK_PROGRESS)[number]
 
 export const PROGRESS_LABELS: Record<TaskProgress, string> = {
-  not_started: 'Not started',
-  in_progress: 'In progress',
+  not_started: 'To do',
+  in_progress: 'Doing',
   completed: 'Completed',
 }
 

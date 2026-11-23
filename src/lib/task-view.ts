@@ -19,7 +19,7 @@ export const GROUP_BY_LABELS: Record<TaskViewState['groupBy'], string> = { statu
 export const SHOW_LABELS: Record<TaskViewState['show'][number], string> = { overdue: 'Overdue', week: 'Due this week', nodate: 'No date', hidedone: 'Hide done' }
 
 export const STATUS_ORDER = ['in_progress', 'not_started', 'completed'] as const
-export const STATUS_TEXT: Record<string, string> = { not_started: 'Not started', in_progress: 'In progress', completed: 'Done' }
+export const STATUS_TEXT: Record<string, string> = { not_started: 'To do', in_progress: 'Doing', completed: 'Done' }
 
 /** How many filters are on, for the count on the Filter button. */
 export function activeFilterCount(v: TaskViewState) {

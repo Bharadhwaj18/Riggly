@@ -50,7 +50,7 @@ describe('sortTasks and groupTasks', () => {
   })
   it('groups by status with Done folded away', () => {
     const sections = groupTasks([task({ progress: 'completed' }), task({ progress: 'in_progress' })], DEFAULT_VIEW, { boards: [], nameById: {} })
-    expect(sections.map(s => [s.label, s.tasks.length, !!s.collapsedByDefault])).toEqual([['In progress', 1, false], ['Not started', 0, false], ['Done', 1, true]])
+    expect(sections.map(s => [s.label, s.tasks.length, !!s.collapsedByDefault])).toEqual([['Doing', 1, false], ['To do', 0, false], ['Done', 1, true]])
   })
   it('groups by person with nobody last', () => {
     const sections = groupTasks([task({ assignee_ids: [] }), task({ assignee_ids: ['r'] })], { ...DEFAULT_VIEW, groupBy: 'person' }, { boards: [] as TaskBoard[], nameById: { r: 'Raga' } })

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react'
 import { deleteBoard, renameBoard } from '@/actions/tasks'
 import { useToast } from '@/components/ui/Toaster'
-import type { Member, Task, TaskBoard, TaskBucket } from '@/types/tasks'
+import type { Member, Task, TaskBoard } from '@/types/tasks'
 import { KanbanBoard } from '../KanbanBoard'
 import { TaskModal } from '../TaskModal'
 import { LabelsManager } from '../LabelsManager'
@@ -13,12 +13,12 @@ import { CellMenu } from './CellMenu'
 
 interface Props {
   boards: TaskBoard[]
-  buckets: TaskBucket[]
   /** Already filtered by the shared Filter sheet. */
   tasks: Task[]
   members: Member[]
   nameById: Record<string, string>
   today: string
+  /** One group, or every group when not set. */
   groupId?: string
   readOnly: boolean
   onNewGroup: () => void
@@ -26,27 +26,31 @@ interface Props {
 }
 
 const NEW = '__new__'
+const ALL = '__all__'
 
-/** Kanban shows one group at a time, since each group has its own buckets. */
-export function KanbanPanel({ boards, buckets, tasks, members, nameById, today, groupId, readOnly, onNewGroup, toolbar }: Props) {
+/** The board: To do, Doing, Done. Every group at once, or one group. */
+export function KanbanPanel({ boards, tasks, members, nameById, today, groupId, readOnly, onNewGroup, toolbar }: Props) {
   const router = useRouter()
   const toast = useToast()
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [, startTransition] = useTransition()
-  const board = boards.find(b => b.id === groupId) ?? boards[0]
-  const boardBuckets = useMemo(() => buckets.filter(b => b.board_id === board.id), [buckets, board.id])
-  const boardTasks = useMemo(() => tasks.filter(t => t.board_id === board.id), [tasks, board.id])
-  const labelsById = useMemo(() => Object.fromEntries(board.labels.map(l => [l.id, l])), [board.labels])
-  const openTask = openTaskId ? boardTasks.find(t => t.id === openTaskId) : undefined
+  const board = groupId ? boards.find(b => b.id === groupId) ?? null : null
+  const shownBoards = board ? [board] : boards
+  const shownTasks = useMemo(() => (board ? tasks.filter(t => t.board_id === board.id) : tasks), [tasks, board])
+  const labelsById = useMemo(() => Object.fromEntries(boards.flatMap(b => b.labels).map(l => [l.id, l])), [boards])
+  const openTask = openTaskId ? shownTasks.find(t => t.id === openTaskId) : undefined
+  const openBoard = openTask ? boards.find(b => b.id === openTask.board_id) : undefined
 
   const rename = () => {
+    if (!board) return
     setMenuOpen(false)
     const next = window.prompt('Rename this group', board.name)?.trim()
     if (!next || next === board.name) return
     startTransition(async () => { const r = await renameBoard(board.id, next); if (r.error) toast(r.error, 'error'); else router.refresh() })
   }
   const remove = () => {
+    if (!board) return
     setMenuOpen(false)
     const count = tasks.filter(t => t.board_id === board.id).length
     if (!window.confirm(`Delete “${board.name}” and its ${count} task${count === 1 ? '' : 's'}? This can’t be undone.`)) return
@@ -61,13 +65,17 @@ export function KanbanPanel({ boards, buckets, tasks, members, nameById, today, 
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <CellMenu label="Group" value={board.id} className="min-h-10 rounded-xl border border-brand-200 bg-white px-3"
-          trigger={<span className="text-sm font-extrabold text-gray-900">Group: {board.name}</span>}
-          options={[...boards.map(b => ({ value: b.id, label: b.name })), ...(readOnly ? [] : [{ value: NEW, label: <span className="flex items-center gap-1.5 text-brand-700"><Plus className="h-4 w-4" />New group</span> }])]}
-          onChange={v => (v === NEW ? onNewGroup() : router.push(`/tasks?view=kanban&group=${v}`))} />
+        <CellMenu label="Group" value={board?.id ?? ALL} className="min-h-10 rounded-xl border border-brand-200 bg-white px-3"
+          trigger={<span className="text-sm font-extrabold text-gray-900">{board ? `Group: ${board.name}` : 'All groups'}</span>}
+          options={[
+            { value: ALL, label: 'All groups' },
+            ...boards.map(b => ({ value: b.id, label: b.name })),
+            ...(readOnly ? [] : [{ value: NEW, label: <span className="flex items-center gap-1.5 text-brand-700"><Plus className="h-4 w-4" />New group</span> }]),
+          ]}
+          onChange={v => (v === NEW ? onNewGroup() : router.push(v === ALL ? '/tasks?view=kanban' : `/tasks?view=kanban&group=${v}`))} />
         {toolbar}
-        {!readOnly && <LabelsManager boardId={board.id} labels={board.labels} />}
-        {!readOnly && (
+        {board && !readOnly && <LabelsManager boardId={board.id} labels={board.labels} />}
+        {board && !readOnly && (
           <div className="relative">
             <button type="button" onClick={() => setMenuOpen(v => !v)} aria-label="Group options" aria-expanded={menuOpen}
               className="flex h-10 w-10 items-center justify-center rounded-xl border border-brand-200 bg-white text-gray-600 hover:bg-brand-50">
@@ -86,10 +94,12 @@ export function KanbanPanel({ boards, buckets, tasks, members, nameById, today, 
         )}
       </div>
 
-      <KanbanBoard boardId={board.id} buckets={boardBuckets} tasks={boardTasks} labelsById={labelsById} nameById={nameById} today={today} onOpenTask={setOpenTaskId} />
+      <KanbanBoard boards={shownBoards} tasks={shownTasks} labelsById={labelsById} nameById={nameById} today={today}
+        readOnly={readOnly} showGroup={!board && boards.length > 1} onOpenTask={setOpenTaskId} />
 
-      {openTask && (
-        <TaskModal key={openTask.id} task={openTask} buckets={[...boardBuckets].sort((a, b) => a.position - b.position)} labels={board.labels} members={members} onClose={() => setOpenTaskId(null)} />
+      {openTask && openBoard && (
+        <TaskModal key={openTask.id} task={openTask}
+          labels={openBoard.labels} members={members} onClose={() => setOpenTaskId(null)} />
       )}
     </div>
   )

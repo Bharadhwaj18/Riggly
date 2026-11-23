@@ -9,8 +9,8 @@ import { cn } from '@/lib/utils'
 import type { Task } from '@/types/tasks'
 import type { CellContext } from './cells'
 
-/** Notes, checklist and delete, opened right under the task's row instead of in a pop-up. */
-export function TaskExtras({ task, c }: { task: Task; c: CellContext }) {
+/** Notes, checklist and delete for one task. `stacked`: one column, for a narrow panel. */
+export function TaskExtras({ task, c, stacked = false }: { task: Task; c: CellContext; stacked?: boolean }) {
   const router = useRouter()
   const toast = useToast()
   const [notes, setNotes] = useState(task.description ?? '')
@@ -35,7 +35,7 @@ export function TaskExtras({ task, c }: { task: Task; c: CellContext }) {
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2" onClick={e => e.stopPropagation()}>
+    <div className={cn('grid gap-4', !stacked && 'sm:grid-cols-2')} onClick={e => e.stopPropagation()}>
       <div>
         <label htmlFor={`notes-${task.id}`} className="mb-1.5 block text-xs font-extrabold uppercase tracking-[0.1em] text-gray-500">Notes</label>
         <textarea id={`notes-${task.id}`} value={notes} readOnly={c.readOnly} rows={4} placeholder="Anything worth remembering about this task"
