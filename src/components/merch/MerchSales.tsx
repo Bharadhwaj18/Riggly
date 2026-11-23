@@ -39,18 +39,22 @@ function paymentLine(sales: SaleWithShow[], money: (n: number) => string) {
 }
 
 /** Sales waiting for approval, one card per show. Approvers approve the whole show at once (one Finance entry). */
-export function PendingApprovals({ sales, moves, members, accounts, canApprove, userId }: {
+/** A kit whose stall was closed and is waiting for an approver. */
+export interface ClosedKit { id: string; title: string; date: string | null; closedBy: string; money: number }
+
+export function PendingApprovals({ sales, moves, members, accounts, canApprove, userId, closedKits = [] }: {
   sales: SaleWithShow[]
   moves: MerchMove[]
   members: Person[]
   accounts: AccountOption[]
   canApprove: boolean
   userId: string
+  closedKits?: ClosedKit[]
 }) {
   const { money } = useMoney()
   const [approving, setApproving] = useState<SaleWithShow[] | null>(null)
   const groups = groupSalesByShow(sales.filter(s => s.status === 'pending'))
-  if (!groups.length) return null
+  if (!groups.length && !closedKits.length) return null
 
   return (
     <div className="mb-5 rounded-2xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-500/40 dark:bg-amber-500/10">
@@ -59,6 +63,18 @@ export function PendingApprovals({ sales, moves, members, accounts, canApprove, 
         {canApprove ? 'Nothing goes into Finance until you approve it. Each show becomes one income entry.' : 'An admin or someone with the Merch role approves these before they go into Finance.'}
       </p>
       <div className="space-y-2">
+        {closedKits.map(k => (
+          <Link key={k.id} href={`/merch/kits/${k.id}`} className="flex flex-wrap items-center gap-3 rounded-xl bg-white px-3 py-2.5 shadow-sm hover:bg-brand-50">
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold text-gray-900">
+                {k.title}{k.date && <span className="font-normal text-gray-500"> · {formatDateDMY(k.date)}</span>}
+              </span>
+              <span className="block text-xs text-gray-500">Kit closed by {k.closedBy}</span>
+            </span>
+            <span className="text-sm font-bold tabular-nums text-gray-900">{money(k.money)}</span>
+            <span className="text-xs font-bold text-brand-700">{canApprove ? 'Review' : 'Open'} →</span>
+          </Link>
+        ))}
         {groups.map(g => {
           const ids = new Set(g.sales.map(s => s.id))
           const total = g.sales.reduce((n, s) => n + saleTakings(s), 0)
