@@ -452,3 +452,11 @@ h1, h2 {
   .transition-lift, .drag-lifted { transition: none; }
   .transition-lift:hover { transform: none; }
 }
+
+/* Guided tours: a soft ring that pulses out from the highlighted thing. */
+@keyframes tour-pulse {
+  0% { opacity: 0.9; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.12); }
+}
+.tour-pulse { animation: tour-pulse 1.6s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) { .tour-pulse { animation: none; opacity: 0; } }

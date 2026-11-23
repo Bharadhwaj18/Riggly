@@ -320,7 +320,7 @@ export default async function TodayPage() {
       </header>
 
       {(canLogMoney || quickActions.length > 0) && (
-        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
+        <div data-tour="today-actions" className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
           {canLogMoney && <LogMoneyChip className={`${chipCls} border-brand-400 bg-brand-400 text-white hover:bg-brand-500`} />}
           {quickActions.map(a => (
             <Link key={a.href} href={a.href} className={`${chipCls} border-brand-200 bg-white text-gray-700 hover:bg-brand-100`}>
@@ -332,7 +332,7 @@ export default async function TodayPage() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
         {placed.map((w, i) => (
-          <div key={w.id} className={cn('animate-fade-up min-w-0', spanClass(w.span))} style={{ animationDelay: `${i * 70}ms` }}>
+          <div key={w.id} data-tour={`today-${w.id}`} className={cn('animate-fade-up min-w-0', spanClass(w.span))} style={{ animationDelay: `${i * 70}ms` }}>
             {w.node}
           </div>
         ))}

@@ -146,7 +146,7 @@ export default async function ShowDetailPage({ params }: Props) {
       </div>
 
       {/* Show progress */}
-      <div className={cn(card, 'mb-5 flex items-center gap-2 overflow-x-auto py-3')}>
+      <div data-tour="show-progress" className={cn(card, 'mb-5 flex items-center gap-2 overflow-x-auto py-3')}>
         <SectionLabel className="mr-2 shrink-0">Show progress</SectionLabel>
         {steps.map((step, i) => (
           <div key={`${step.label}-${i}`} className="flex shrink-0 items-center gap-2">

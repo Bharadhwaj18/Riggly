@@ -153,6 +153,7 @@ export function SetlistsBrowser({ setlists, countMap, previews, today }: Props) 
                     <LongPressMenu key={s.id} title={s.title} items={menu}>
                     <Link
                       href={`/setlists/${s.id}`}
+                      data-tour="setlist-row"
                       onClick={e => pick(e, s.id)}
                       className={cn(
                         'flex items-center gap-3 rounded-2xl border bg-white p-3 transition-colors',

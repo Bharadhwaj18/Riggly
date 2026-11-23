@@ -230,7 +230,7 @@ export function CalendarMonthView({
 
       <div className="flex flex-col gap-4 md:flex-row md:items-start">
         {/* Desktop month: pills inside each day */}
-        <div className="hidden min-w-0 flex-1 overflow-hidden rounded-2xl border border-brand-200 bg-white shadow-sm md:block">
+        <div data-tour="calendar-month" className="hidden min-w-0 flex-1 overflow-hidden rounded-2xl border border-brand-200 bg-white shadow-sm md:block">
           <div className="grid grid-cols-7 border-b border-brand-100 bg-brand-50">
             {WEEKDAYS.map(label => (
               <div key={label} className="py-2 text-center text-[11px] font-extrabold uppercase tracking-[0.1em] text-gray-500">{label}</div>
@@ -285,7 +285,7 @@ export function CalendarMonthView({
         </div>
 
         {/* Phone month: dots under each day, the agenda below */}
-        <div {...swipe} className="touch-pan-y overflow-hidden rounded-2xl border border-brand-200 bg-white px-2 pb-2 pt-2.5 shadow-sm md:hidden">
+        <div {...swipe} data-tour="calendar-month" className="touch-pan-y overflow-hidden rounded-2xl border border-brand-200 bg-white px-2 pb-2 pt-2.5 shadow-sm md:hidden">
           <div className="flex items-center justify-between px-2.5 pb-2">
             <h2 key={monthLabel} className={cn('font-display text-lg font-bold text-gray-900', slideClass)}>{monthLabel}</h2>
             <div className="flex items-center gap-1">
@@ -373,8 +373,8 @@ export function CalendarMonthView({
         </div>
 
         {/* Selected day: side panel (desktop) / agenda (phone). Keyed by date so open forms reset when the day changes. */}
-        <DayDetailPanel key={`panel-${selectedDate}`} layout="panel" className="hidden w-[17rem] shrink-0 md:block" {...detailProps} />
-        <DayDetailPanel key={`agenda-${selectedDate}`} layout="agenda" className="md:hidden" {...detailProps} />
+        <div data-tour="calendar-day" className="hidden w-[17rem] shrink-0 md:block"><DayDetailPanel key={`panel-${selectedDate}`} layout="panel" {...detailProps} /></div>
+        <div data-tour="calendar-day" className="md:hidden"><DayDetailPanel key={`agenda-${selectedDate}`} layout="agenda" {...detailProps} /></div>
       </div>
     </div>
   )

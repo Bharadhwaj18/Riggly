@@ -33,6 +33,7 @@ export function MobileTabBar({ pendingPaymentCount = 0, hiddenSections = [] }: {
   return (
     <nav
       aria-label="Main"
+      data-tour="nav"
       className="fixed inset-x-0 bottom-0 z-40 flex items-stretch justify-around border-t border-brand-200 bg-white pb-[env(safe-area-inset-bottom)] lg:hidden"
     >
       {/* One pill that slides between tabs, instead of each tab lighting up on its own. */}

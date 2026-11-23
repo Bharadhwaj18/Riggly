@@ -1,6 +1,6 @@
 /** Every page in Settings, in order, and who gets to see it. Used for the phone list and the desktop menu. */
 
-export type SettingsIcon = 'profile' | 'signin' | 'appearance' | 'notifications' | 'general' | 'members' | 'invites' | 'money' | 'leave' | 'platform'
+export type SettingsIcon = 'profile' | 'signin' | 'appearance' | 'notifications' | 'general' | 'members' | 'invites' | 'money' | 'leave' | 'platform' | 'help'
 
 export interface SettingsItem {
   key: SettingsIcon
@@ -29,6 +29,7 @@ export function settingsItems(who: SettingsWho): SettingsItem[] {
     { key: 'appearance', href: '/settings/appearance', label: 'Appearance', section: 'you', hint: 'Light or dark' },
     { key: 'notifications', href: '/settings/notifications', label: 'Notifications', section: 'you', hint: 'This device' },
   ]
+  items.push({ key: 'help', href: '/settings/help', label: 'Help & tours', section: 'you', hint: 'How things work' })
   if (who.isPlatformAdmin) items.push({ key: 'platform', href: '/admin', label: 'Admin panel', section: 'you', hint: 'All workspaces' })
   if (!who.isPersonal) {
     items.push(

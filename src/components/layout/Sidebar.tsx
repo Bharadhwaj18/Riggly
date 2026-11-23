@@ -81,7 +81,7 @@ export function Sidebar({ user, pendingPaymentCount = 0, notifications = [], wor
   const isActive = (href: string) => (href === '/' ? pathname === '/' : pathname.startsWith(href))
 
   const nav = (
-    <nav className="flex flex-1 flex-col gap-2.5 py-2">
+    <nav data-tour="nav" className="flex flex-1 flex-col gap-2.5 py-2">
       {visibleGroups.map((group, i) => (
         <div key={group.label ?? i} className="flex flex-col gap-0.5">
           {group.label && (

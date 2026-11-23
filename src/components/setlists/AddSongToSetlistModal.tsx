@@ -100,7 +100,7 @@ export function AddSongToSetlistModal({ setlistId, allSongs, currentSongIds, ava
 
   return (
     <>
-      <Button onClick={() => setOpen(true)}>
+      <Button data-tour="setlist-add-songs" onClick={() => setOpen(true)}>
         <Plus className="h-4 w-4" /> Add Songs
       </Button>
 

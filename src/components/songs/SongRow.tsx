@@ -33,6 +33,7 @@ export function SongRow({ song, setlistCount, playable, coverLink }: SongRowProp
     <LongPressMenu title={song.title} items={menu} className="flex items-center border-b border-gray-100 transition-colors last:border-b-0 hover:bg-gray-50">
     <Link
       href={`/songs/${song.id}`}
+      data-tour="song-row"
       className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3"
     >
       <span className="relative shrink-0">

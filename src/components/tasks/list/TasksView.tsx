@@ -416,7 +416,7 @@ function AddTaskRow({ boards, target, className }: { boards: TaskBoard[]; target
 
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} className={cn('flex min-h-11 w-full items-center gap-2 text-left text-sm font-bold text-gray-500 hover:text-gray-800', className)}>
+      <button type="button" data-tour="task-add" onClick={() => setOpen(true)} className={cn('flex min-h-11 w-full items-center gap-2 text-left text-sm font-bold text-gray-500 hover:text-gray-800', className)}>
         <Plus className="h-4 w-4" />Add a task
       </button>
     )

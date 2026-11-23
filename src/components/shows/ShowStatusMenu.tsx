@@ -66,7 +66,7 @@ export function ShowStatusMenu({ showId, status, canEdit, showNext = false, clas
   const next = nextStatus(current)
 
   return (
-    <div ref={box} className={cn('relative inline-flex items-center gap-1.5', className)}>
+    <div ref={box} data-tour="show-status" className={cn('relative inline-flex items-center gap-1.5', className)}>
       <button
         type="button"
         aria-haspopup="menu"
