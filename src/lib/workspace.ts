@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getCachedUser } from '@/lib/auth-cache'
 import { WORKSPACE_COOKIE, pickCurrentWorkspace, normalisePermissions } from '@/lib/workspace-shared'
 import type { WorkspaceContext, WorkspaceMembership } from '@/types/workspace'
-import { hiddenSectionsOf, sectionLevelsFrom, type SectionKey } from '@/lib/workspace-sections'
+import { featuresFrom, hiddenSectionsOf, sectionLevelsFrom, withFeatures, type SectionKey } from '@/lib/workspace-sections'
 
 /**
  * The signed-in user's workspaces plus which one is currently selected
@@ -33,7 +33,10 @@ export const getWorkspaceContext = cache(async (): Promise<WorkspaceContext | nu
     .map(m => {
       const workspace = workspaces.find(w => w.id === m.workspace_id)
       return workspace
-        ? { workspace, role: m.role, permissions: normalisePermissions(m.permissions), sections: sectionLevelsFrom(m.permissions, m.role) }
+        ? (() => {
+            const features = featuresFrom(workspace.settings)
+            return { workspace, role: m.role, permissions: normalisePermissions(m.permissions), features, sections: withFeatures(sectionLevelsFrom(m.permissions, m.role), features) }
+          })()
         : null
     })
     .filter((m): m is WorkspaceMembership => m !== null)
@@ -75,6 +78,7 @@ export type MerchScope = 'full' | 'crew' | 'none'
  * 'crew' for Merch crew (only their own show kits); 'none' otherwise.
  */
 export function merchScopeOf(membership: WorkspaceMembership): MerchScope {
+  if (!membership.features.merch) return 'none'
   if (isMerchApprover(membership)) return 'full'
   if (hasPermission(membership, 'merch_crew')) return 'crew'
   return membership.sections.merch === 'none' ? 'none' : 'full'

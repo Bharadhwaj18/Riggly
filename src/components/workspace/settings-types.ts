@@ -1,4 +1,4 @@
-import type { SectionLevels } from '@/lib/workspace-sections'
+import type { SectionKey, SectionLevels } from '@/lib/workspace-sections'
 
 export interface MemberRow {
   sections: SectionLevels
@@ -35,5 +35,7 @@ export interface WorkspaceSummary {
   description: string | null
   color: string
   avatarUrl: string | null
+  /** Sections this workspace has switched off; they aren't offered when setting member access. */
+  offSections: SectionKey[]
 }
 

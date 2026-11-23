@@ -1523,6 +1523,18 @@ export type Database = {
           }
         ]
       }
+      platform_admins: {
+        Row: { user_id: string; created_at: string }
+        Insert: { user_id: string; created_at?: string }
+        Update: { user_id?: string; created_at?: string }
+        Relationships: []
+      }
+      platform_settings: {
+        Row: { id: number; core_features: string[]; updated_at: string; updated_by: string | null }
+        Insert: { id?: number; core_features?: string[]; updated_at?: string; updated_by?: string | null }
+        Update: { id?: number; core_features?: string[]; updated_at?: string; updated_by?: string | null }
+        Relationships: []
+      }
       merch_items: {
         Row: {
           id: string
@@ -1918,6 +1930,25 @@ export type Database = {
     }
     Views: { [_ in never]: never }
     Functions: {
+      is_platform_admin: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      admin_workspaces: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string; name: string; type: string; kind: string | null; color: string; plan: string; status: string; created_at: string
+          owner_id: string; owner_name: string | null; owner_email: string | null; members: number; features: Json
+        }[]
+      }
+      admin_set_workspace_features: {
+        Args: { p_workspace: string; p_features: Json }
+        Returns: undefined
+      }
+      admin_set_core_features: {
+        Args: { p_sections: string[] }
+        Returns: undefined
+      }
       update_kit_sale: {
         Args: { p_sale: string; p_amount: number; p_method: string }
         Returns: undefined

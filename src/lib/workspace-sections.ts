@@ -46,3 +46,17 @@ export function sectionForHref(href: string): SectionKey | null {
 export function sectionLabelOf(key: SectionKey): string {
   return SECTIONS.find(s => s.key === key)?.label ?? key
 }
+
+/** Which sections a workspace has switched on (workspaces.settings.features). A missing entry means on. */
+export type WorkspaceFeatures = Record<SectionKey, boolean>
+
+export function featuresFrom(settings: unknown): WorkspaceFeatures {
+  const raw = settings && typeof settings === 'object' && !Array.isArray(settings) ? (settings as Record<string, unknown>).features : undefined
+  const f = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {}
+  return Object.fromEntries(SECTIONS.map(s => [s.key, f[s.key] !== false])) as WorkspaceFeatures
+}
+
+/** A switched-off feature is hidden for everyone, owners included. Mirrors section_level() in the database. */
+export function withFeatures(levels: SectionLevels, features: WorkspaceFeatures): SectionLevels {
+  return Object.fromEntries(SECTIONS.map(s => [s.key, features[s.key] ? levels[s.key] : 'none'])) as SectionLevels
+}

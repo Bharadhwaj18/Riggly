@@ -6,7 +6,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toaster'
 import { setMemberSections } from '@/actions/workspace'
-import type { SectionLevels } from '@/lib/workspace-sections'
+import type { SectionKey, SectionLevels } from '@/lib/workspace-sections'
 import { SectionAccessGrid } from './SectionAccessGrid'
 
 interface Props {
@@ -15,10 +15,12 @@ interface Props {
   initial: SectionLevels
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** Sections the workspace has switched off. */
+  offSections?: SectionKey[]
 }
 
 /** Edit one member's access, section by section. */
-export function AccessDialog({ memberId, memberName, initial, open, onOpenChange }: Props) {
+export function AccessDialog({ memberId, memberName, initial, open, onOpenChange, offSections = [] }: Props) {
   const router = useRouter()
   const toast = useToast()
   const [levels, setLevels] = useState<SectionLevels>(initial)
@@ -45,7 +47,7 @@ export function AccessDialog({ memberId, memberName, initial, open, onOpenChange
   return (
     <Modal open={open} onOpenChange={onOpenChange} title={`What ${memberName} can access`} description="View lets them open a section. Edit lets them add and change things in it." className="max-w-md">
       <div className="mt-2">
-        <SectionAccessGrid levels={levels} onChange={setLevels} disabled={isPending} />
+        <SectionAccessGrid levels={levels} onChange={setLevels} disabled={isPending} hide={offSections} />
       </div>
 
       <div className="mt-5 flex justify-end gap-2">

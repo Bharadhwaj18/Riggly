@@ -11,7 +11,7 @@ import { UserAvatar } from '@/components/ui/UserAvatar'
 /** Phones: the list of everything in Settings. Desktop: the menu is on the left, so this opens on Profile. */
 export default async function SettingsPage() {
   const [s, { options, currentId }] = await Promise.all([getSettingsContext(), getWorkspaceOptions()])
-  const items = settingsItems({ isPersonal: s.isPersonal, isAdmin: s.isAdmin, workspaceName: s.workspace.name })
+  const items = settingsItems({ isPersonal: s.isPersonal, isAdmin: s.isAdmin, workspaceName: s.workspace.name, isPlatformAdmin: s.isPlatformAdmin })
   const admins = !s.isAdmin && !s.isPersonal
     ? (await getSettingsMembers()).filter(m => m.role === 'owner' || m.role === 'admin').map(m => m.name)
     : []

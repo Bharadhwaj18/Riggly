@@ -12,7 +12,7 @@ export default async function MembersPage() {
     <>
       <SettingsHeader eyebrow={s.workspace.name} title="Members" />
       <div className="max-w-2xl">
-        <MembersSettings workspaceName={s.workspace.name} members={members} isAdmin={s.isAdmin} isOwner={s.isOwner} activeInviteCount={invites.length} groups={groups} />
+        <MembersSettings workspaceName={s.workspace.name} members={members} isAdmin={s.isAdmin} isOwner={s.isOwner} activeInviteCount={invites.length} groups={groups} offSections={s.workspace.offSections} />
       </div>
     </>
   )

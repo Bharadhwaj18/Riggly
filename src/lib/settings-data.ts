@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getWorkspaceContext } from '@/lib/workspace'
 import { getCachedAllProfilesWithCrew, getCachedProfileAvatars, getCachedUser } from '@/lib/data'
 import { normalisePermissions } from '@/lib/workspace-shared'
-import { sectionLevelsFrom } from '@/lib/workspace-sections'
+import { SECTIONS, sectionLevelsFrom } from '@/lib/workspace-sections'
 import type { InviteRow, MemberRow, WorkspaceSummary } from '@/components/workspace/settings-types'
 
 /** Who is looking at Settings, and which workspace's settings they're seeing. Shared by the layout and every page. */
@@ -18,7 +18,10 @@ export const getSettingsContext = cache(async () => {
 
   const [profiles, avatars] = await Promise.all([getCachedAllProfilesWithCrew(), getCachedProfileAvatars()])
   const supabase = await createClient()
-  const { data: me } = await supabase.from('profiles').select('display_name').eq('id', user.id).maybeSingle()
+  const [{ data: me }, { data: platformAdmin }] = await Promise.all([
+    supabase.from('profiles').select('display_name').eq('id', user.id).maybeSingle(),
+    supabase.rpc('is_platform_admin'),
+  ])
 
   const summary: WorkspaceSummary = {
     id: workspace.id,
@@ -27,6 +30,7 @@ export const getSettingsContext = cache(async () => {
     description: workspace.description ?? null,
     color: workspace.color,
     avatarUrl: workspace.avatar_url ?? null,
+    offSections: SECTIONS.filter(sec => !ctx.current.features[sec.key]).map(sec => sec.key),
   }
 
   return {
@@ -38,6 +42,8 @@ export const getSettingsContext = cache(async () => {
     isPersonal,
     isOwner,
     isAdmin,
+    /** Can open the admin panel (every workspace's features). Not the same as a workspace admin. */
+    isPlatformAdmin: platformAdmin === true,
   }
 })
 

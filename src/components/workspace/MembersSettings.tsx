@@ -10,7 +10,7 @@ import { UserAvatar } from '@/components/ui/UserAvatar'
 import { cn } from '@/lib/utils'
 import type { MemberRow } from './settings-types'
 import { AccessDialog } from './AccessDialog'
-import { SECTIONS } from '@/lib/workspace-sections'
+import { SECTIONS, type SectionKey } from '@/lib/workspace-sections'
 import type { WorkspaceGroup } from '@/lib/groups'
 import { GroupTag, GroupsSection, MemberGroupsSheet } from '@/components/groups/GroupsSettings'
 import { Select } from '@/components/ui/Select'
@@ -24,9 +24,11 @@ interface Props {
   isOwner: boolean
   activeInviteCount: number
   groups: WorkspaceGroup[]
+  /** Sections the workspace has switched off. */
+  offSections?: SectionKey[]
 }
 
-export function MembersSettings({ workspaceName, members, isAdmin, isOwner, activeInviteCount, groups }: Props) {
+export function MembersSettings({ workspaceName, members, isAdmin, isOwner, activeInviteCount, groups, offSections = [] }: Props) {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
@@ -161,6 +163,7 @@ export function MembersSettings({ workspaceName, members, isAdmin, isOwner, acti
           memberId={accessFor.userId}
           memberName={accessFor.name}
           initial={accessFor.sections}
+          offSections={offSections}
           open
           onOpenChange={o => { if (!o) setAccessFor(null) }}
         />

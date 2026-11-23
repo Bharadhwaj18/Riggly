@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Bell, ChevronRight, KeyRound, Link2, LogOut, Sun, SquarePen, User, Users, Wallet, type LucideIcon } from 'lucide-react'
+import { Bell, ChevronRight, KeyRound, Link2, LogOut, ShieldCheck, Sun, SquarePen, User, Users, Wallet, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { SettingsIcon, SettingsItem } from '@/lib/settings-sections'
 import { WorkspacePill } from './WorkspacePill'
@@ -18,6 +18,7 @@ export const SETTINGS_ICONS: Record<SettingsIcon, LucideIcon> = {
   invites: Link2,
   money: Wallet,
   leave: LogOut,
+  platform: ShieldCheck,
 }
 
 const heading = 'text-[11px] font-extrabold uppercase tracking-[0.12em] text-gray-500'

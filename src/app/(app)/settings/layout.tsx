@@ -7,7 +7,7 @@ import { SettingsNav } from '@/components/settings/SettingsNav'
 /** Settings: your own things and the current workspace's, in one place. Desktop shows the menu on the left. */
 export default async function SettingsLayout({ children }: { children: ReactNode }) {
   const [s, { options, currentId }] = await Promise.all([getSettingsContext(), getWorkspaceOptions()])
-  const items = settingsItems({ isPersonal: s.isPersonal, isAdmin: s.isAdmin, workspaceName: s.workspace.name })
+  const items = settingsItems({ isPersonal: s.isPersonal, isAdmin: s.isAdmin, workspaceName: s.workspace.name, isPlatformAdmin: s.isPlatformAdmin })
   return (
     <div className="lg:grid lg:grid-cols-[230px_minmax(0,1fr)] lg:gap-10">
       <aside className="hidden lg:block">

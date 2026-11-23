@@ -1,6 +1,6 @@
 /** Every page in Settings, in order, and who gets to see it. Used for the phone list and the desktop menu. */
 
-export type SettingsIcon = 'profile' | 'signin' | 'appearance' | 'notifications' | 'general' | 'members' | 'invites' | 'money' | 'leave'
+export type SettingsIcon = 'profile' | 'signin' | 'appearance' | 'notifications' | 'general' | 'members' | 'invites' | 'money' | 'leave' | 'platform'
 
 export interface SettingsItem {
   key: SettingsIcon
@@ -18,6 +18,8 @@ export interface SettingsWho {
   isPersonal: boolean
   isAdmin: boolean
   workspaceName: string
+  /** Can open the admin panel. */
+  isPlatformAdmin?: boolean
 }
 
 export function settingsItems(who: SettingsWho): SettingsItem[] {
@@ -27,6 +29,7 @@ export function settingsItems(who: SettingsWho): SettingsItem[] {
     { key: 'appearance', href: '/settings/appearance', label: 'Appearance', section: 'you', hint: 'Light or dark' },
     { key: 'notifications', href: '/settings/notifications', label: 'Notifications', section: 'you', hint: 'This device' },
   ]
+  if (who.isPlatformAdmin) items.push({ key: 'platform', href: '/admin', label: 'Admin panel', section: 'you', hint: 'All workspaces' })
   if (!who.isPersonal) {
     items.push(
       { key: 'general', href: '/settings/workspace', label: 'General', section: 'workspace', ...(who.isAdmin ? { hint: 'Name, logo, colour' } : { pill: 'View only' }) },

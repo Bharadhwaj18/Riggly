@@ -9,7 +9,7 @@ import { SectionLabel } from '@/components/ui/SectionLabel'
 import { StatusPill } from '@/components/ui/StatusPill'
 import { APP_NAME } from '@/lib/brand'
 import { cn } from '@/lib/utils'
-import { SECTIONS, type SectionLevels } from '@/lib/workspace-sections'
+import { SECTIONS, type SectionKey, type SectionLevels } from '@/lib/workspace-sections'
 import { SectionAccessGrid, accessSummary, allSections } from './SectionAccessGrid'
 import type { InviteRow } from './settings-types'
 import { Select } from '@/components/ui/Select'
@@ -78,7 +78,7 @@ function crewSummary(levels: SectionLevels | null): string {
   return extra.length ? 'Own kits, also ' + extra.join(', ') : 'Own kits only'
 }
 
-export function InvitesSettings({ invites, workspaceName }: { invites: InviteRow[]; workspaceName: string }) {
+export function InvitesSettings({ invites, workspaceName, offSections = [] }: { invites: InviteRow[]; workspaceName: string; offSections?: SectionKey[] }) {
   const router = useRouter()
   const [role, setRole] = useState<'member' | 'admin' | 'crew'>('member')
   const [sections, setSections] = useState<SectionLevels>(allSections('edit'))
@@ -162,7 +162,7 @@ export function InvitesSettings({ invites, workspaceName }: { invites: InviteRow
                 ? 'Merch is always just their own kits. Tick anything else they should see, like Setlists. You can change this later in Members.'
                 : 'View lets them see a section. Edit lets them add and change things. You can still change this for each person later in Members.'}
             </p>
-            <SectionAccessGrid levels={sections} onChange={setSections} disabled={pending} hide={role === 'crew' ? ['merch'] : []} />
+            <SectionAccessGrid levels={sections} onChange={setSections} disabled={pending} hide={role === 'crew' ? [...offSections, 'merch'] : offSections} />
           </div>
         )}
 

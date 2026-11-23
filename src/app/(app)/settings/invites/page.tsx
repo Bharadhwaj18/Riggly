@@ -10,7 +10,7 @@ export default async function InvitesPage() {
   return (
     <>
       <SettingsHeader eyebrow={s.workspace.name} title="Invites" />
-      <div className="max-w-2xl"><InvitesSettings invites={invites} workspaceName={s.workspace.name} /></div>
+      <div className="max-w-2xl"><InvitesSettings invites={invites} workspaceName={s.workspace.name} offSections={s.workspace.offSections} /></div>
     </>
   )
 }
