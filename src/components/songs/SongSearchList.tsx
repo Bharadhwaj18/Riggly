@@ -27,19 +27,22 @@ export function SongSearchList({ songs, setlistCounts, playables, coverLinks }: 
   const [query, setQuery] = useState('')
   const [needsChart, setNeedsChart] = useState(false)
   const [key, setKey] = useState('')
-  const [tag, setTag] = useState('')
+  // Tags picked from the chips: a song needs all of them.
+  const [picked, setPicked] = useState<string[]>([])
+  const togglePicked = (t: string) => setPicked(p => (p.some(x => x.toLowerCase() === t.toLowerCase()) ? p.filter(x => x.toLowerCase() !== t.toLowerCase()) : [...p, t]))
 
   const needChartCount = useMemo(() => songs.filter(s => !s.chord_chart).length, [songs])
   const tags = useMemo(() => tagCounts(songs), [songs])
   const keys = useMemo(() => [...new Set(songs.map(s => s.song_key).filter((k): k is string => !!k))].sort(), [songs])
 
   const groups = useMemo(() => {
-    const q = query.trim().toLowerCase()
+    const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
     const filtered = songs
       .filter(s => !needsChart || !s.chord_chart)
       .filter(s => !key || s.song_key === key)
-      .filter(s => !tag || s.tags?.some(t => t.toLowerCase() === tag.toLowerCase()))
-      .filter(s => !q || s.title.toLowerCase().includes(q) || s.artist?.toLowerCase().includes(q) || s.song_key?.toLowerCase().includes(q) || s.tags?.some(t => t.toLowerCase().includes(q)))
+      .filter(s => picked.every(p => s.tags?.some(t => t.toLowerCase() === p.toLowerCase())))
+      // Every word typed has to match the title, artist, key or a tag, so "hindi commercial" finds songs with both tags.
+      .filter(s => words.every(w => s.title.toLowerCase().includes(w) || s.artist?.toLowerCase().includes(w) || s.song_key?.toLowerCase().includes(w) || s.tags?.some(t => t.toLowerCase().includes(w))))
       .sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }))
     const byLetter = new Map<string, Song[]>()
     for (const s of filtered) {
@@ -47,7 +50,7 @@ export function SongSearchList({ songs, setlistCounts, playables, coverLinks }: 
       byLetter.set(l, [...(byLetter.get(l) ?? []), s])
     }
     return [...byLetter.entries()]
-  }, [songs, query, needsChart, key, tag])
+  }, [songs, query, needsChart, key, picked])
 
   const jumpTo = (letter: string) => document.getElementById(`songs-letter-${letter}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
@@ -66,12 +69,12 @@ export function SongSearchList({ songs, setlistCounts, playables, coverLinks }: 
       </div>
 
       <div className="no-scrollbar mb-4 flex items-center gap-2 overflow-x-auto">
-        <Chip active={!needsChart && !key && !tag} onClick={() => { setNeedsChart(false); setKey(''); setTag('') }}>All {songs.length}</Chip>
+        <Chip active={!needsChart && !key && picked.length === 0} onClick={() => { setNeedsChart(false); setKey(''); setPicked([]) }}>All {songs.length}</Chip>
         {needChartCount > 0 && (
           <Chip active={needsChart} onClick={() => setNeedsChart(v => !v)}>Needs chart {needChartCount}</Chip>
         )}
         {tags.slice(0, 12).map(t => (
-          <Chip key={t.tag} active={tag.toLowerCase() === t.tag.toLowerCase()} onClick={() => setTag(v => (v.toLowerCase() === t.tag.toLowerCase() ? '' : t.tag))}>{t.tag} {t.count}</Chip>
+          <Chip key={t.tag} active={picked.some(p => p.toLowerCase() === t.tag.toLowerCase())} onClick={() => togglePicked(t.tag)}>{t.tag} {t.count}</Chip>
         ))}
         {keys.length > 0 && (
           <Select
