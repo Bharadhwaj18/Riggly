@@ -9,6 +9,7 @@ import { formatMoney } from '@/lib/finance/settings'
 import { Button } from '@/components/ui/Button'
 import { SectionLabel } from '@/components/ui/SectionLabel'
 import { StatusPill, type PillTone } from '@/components/ui/StatusPill'
+import { ShowStatusMenu } from '@/components/shows/ShowStatusMenu'
 import { DateTile } from '@/components/ui/DateTile'
 import { DeleteShowButton } from '@/components/shows/DeleteShowButton'
 import { ShowDocuments } from '@/components/shows/ShowDocuments'
@@ -125,7 +126,7 @@ export default async function ShowDetailPage({ params }: Props) {
               </p>
             )}
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              {show.booking_status && <StatusPill tone={BOOKED.includes(show.booking_status) ? 'green' : 'amber'}>{show.booking_status}</StatusPill>}
+              <ShowStatusMenu key={show.booking_status ?? 'none'} showId={id} status={show.booking_status} canEdit={ctx?.current.sections.shows === 'edit'} showNext />
               {show.format && <StatusPill tone="gray">{show.format}</StatusPill>}
               <StatusPill tone={isSplit ? 'green' : 'amber'}>{isSplit ? 'Split' : 'Unsplit'}</StatusPill>
               {show.media_url && (

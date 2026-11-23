@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { getCachedShow, getCachedEventManagementCompanies } from '@/lib/data'
 import { ShowForm } from '@/components/shows/ShowForm'
+import { getWorkspaceContext } from '@/lib/workspace'
 import { updateShow } from '@/actions/shows'
 import type { ShowFormData } from '@/lib/validators'
 
@@ -35,7 +36,7 @@ export default async function EditShowPage({ params }: Props) {
         <ChevronLeft className="h-4 w-4" /> {show.title}
       </Link>
       <h1 className="mb-6 text-3xl font-bold text-gray-900">Edit show</h1>
-      <ShowForm show={show} eventManagementCompanies={eventManagementCompanies} onSubmit={handleUpdate} />
+      <ShowForm show={show} eventManagementCompanies={eventManagementCompanies} canAddAgency={(await getWorkspaceContext())?.current.sections.agencies === 'edit'} onSubmit={handleUpdate} />
     </div>
   )
 }

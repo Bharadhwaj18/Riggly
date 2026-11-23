@@ -23,6 +23,31 @@ export async function createEventManagement(data: EventManagementFormData): Prom
   redirect(`/event-management/${company.id}`)
 }
 
+/** Adds an agency by name from the show form, without leaving it. Contact details can be filled in later. */
+export async function quickAddAgency(name: string): Promise<{ error?: string; agency?: { id: string; name: string } }> {
+  const clean = name.trim().replace(/\s+/g, ' ')
+  if (!clean) return { error: 'Type the agency’s name first.' }
+  if (clean.length > 120) return { error: 'That name is too long.' }
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+  const workspaceId = await requireWorkspaceId()
+
+  // Same name already there (any case)? Use it rather than making a duplicate.
+  const { data: existing } = await supabase.from('event_management').select('id, name').eq('workspace_id', workspaceId).ilike('name', clean.replace(/[%_\\]/g, '\\$&')).limit(1).maybeSingle()
+  if (existing) return { agency: existing }
+
+  const { data: agency, error } = await supabase
+    .from('event_management')
+    .insert({ name: clean, created_by: user.id, workspace_id: workspaceId })
+    .select('id, name')
+    .single()
+  if (error) return { error: error.code === '42501' ? 'You can’t add agencies in this workspace.' : error.message }
+
+  revalidatePath('/event-management')
+  return { agency }
+}
+
 export async function updateEventManagement(id: string, data: EventManagementFormData): Promise<{ error?: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { sectionGuard } from '@/lib/section-guard'
 import { ChevronLeft } from 'lucide-react'
 import { ShowForm } from '@/components/shows/ShowForm'
+import { getWorkspaceContext } from '@/lib/workspace'
 import { createShow } from '@/actions/shows'
 import { getCachedEventManagementCompanies } from '@/lib/data'
 
@@ -23,7 +24,7 @@ export default async function NewShowPage({ searchParams }: Props) {
         <ChevronLeft className="h-4 w-4" /> Shows
       </Link>
       <h1 className="mb-6 text-3xl font-bold text-gray-900">New show</h1>
-      <ShowForm eventManagementCompanies={eventManagementCompanies} onSubmit={createShow} initialDate={date} />
+      <ShowForm eventManagementCompanies={eventManagementCompanies} canAddAgency={(await getWorkspaceContext())?.current.sections.agencies === 'edit'} onSubmit={createShow} initialDate={date} />
     </div>
   )
 }

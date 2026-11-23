@@ -15,7 +15,7 @@ import { computeTds } from '@/lib/finance/tds'
 import type { ShowFormData } from '@/lib/validators'
 import type { Show, EventManagement } from '@/types'
 import { BOOKING_STATUSES, SHOW_FORMATS } from '@/types/shows'
-import { Select } from '@/components/ui/Select'
+import { AgencyPicker, type AgencyChoice } from '@/components/shows/AgencyPicker'
 
 interface ShowFormProps {
   show?: Show
@@ -23,6 +23,8 @@ interface ShowFormProps {
   onSubmit: (data: ShowFormData) => Promise<{ error?: string; id?: string } | void>
   /** Pre-fills the show date — e.g. opened from a specific day on the Calendar. Ignored when editing an existing show. */
   initialDate?: string
+  /** Whether this member may add agencies from the form (edit access to Agencies). */
+  canAddAgency?: boolean
 }
 
 const DIRECT_BOOKING = 'direct'
@@ -69,13 +71,15 @@ function Toggle({ label, active, onClick }: { label: string; active: boolean; on
 }
 
 const card = 'scroll-mt-4 space-y-4 rounded-2xl border border-brand-200 bg-white p-5 shadow-sm'
-const selectClass = 'mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition-colors focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-400'
 
-export function ShowForm({ show, eventManagementCompanies = [], onSubmit, initialDate }: ShowFormProps) {
+export function ShowForm({ show, eventManagementCompanies = [], onSubmit, initialDate, canAddAgency = false }: ShowFormProps) {
   const { money: fmt, symbol, settings: moneySettings } = useMoney()
   const [fields, setFields] = useState(() => fieldsFrom(show, initialDate))
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  // Agencies added from this form join the list straight away.
+  const [addedAgencies, setAddedAgencies] = useState<AgencyChoice[]>([])
+  const agencies: AgencyChoice[] = [...eventManagementCompanies, ...addedAgencies].sort((a, b) => a.name.localeCompare(b.name))
 
   const set = <K extends keyof typeof fields>(key: K, value: typeof fields[K]) =>
     setFields(prev => ({ ...prev, [key]: value }))
@@ -194,15 +198,15 @@ export function ShowForm({ show, eventManagementCompanies = [], onSubmit, initia
         <SectionLabel>Booking &amp; contact</SectionLabel>
         <div>
           <Label htmlFor="event_management_id">Booked through</Label>
-          <Select
+          <AgencyPicker
             id="event_management_id"
-            className={selectClass}
+            agencies={agencies}
             value={fields.event_management_id}
-            onChange={e => pickCompany(e.target.value)}
-          >
-            <option value={DIRECT_BOOKING}>Direct booking</option>
-            {eventManagementCompanies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </Select>
+            directValue={DIRECT_BOOKING}
+            onChange={pickCompany}
+            onAdded={a => setAddedAgencies(prev => [...prev, a])}
+            canAdd={canAddAgency}
+          />
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>

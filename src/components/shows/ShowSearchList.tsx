@@ -2,16 +2,17 @@
 
 import { useMoney } from '@/components/finance/FinanceSettingsContext'
 import { useState } from 'react'
-import { deleteShow } from '@/actions/shows'
+import { deleteShow, setShowStatus } from '@/actions/shows'
+import { ShowStatusMenu, nextStatus } from '@/components/shows/ShowStatusMenu'
 import { LongPressMenu, type MenuItem } from '@/components/ui/LongPressMenu'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Search, CalendarDays, ListMusic, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ArrowRight, Search, CalendarDays, ListMusic, Pencil, Plus, Trash2 } from 'lucide-react'
 import { isUpcoming } from '@/lib/shows'
 import { countdownLabel } from '@/lib/dates'
 import { SegmentedTabs } from '@/components/ui/Chip'
 import { SectionLabel } from '@/components/ui/SectionLabel'
-import { StatusPill, type PillTone } from '@/components/ui/StatusPill'
+import { StatusPill } from '@/components/ui/StatusPill'
 import { DateTile } from '@/components/ui/DateTile'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Button } from '@/components/ui/Button'
@@ -28,12 +29,12 @@ interface ShowSearchListProps {
   today: string
   eventManagementById: Record<string, { id: string; name: string }>
   insights: ShowsInsights
+  /** Whether this member can edit shows (change status from the list). */
+  canEditShows?: boolean
 }
 
 type Tab = 'upcoming' | 'played' | 'insights'
 
-const BOOKED = ['Confirmed', 'Advance Received', 'Completed']
-const statusTone = (status: string): PillTone => (BOOKED.includes(status) ? 'green' : 'amber')
 
 
 const monthLabel = (d: string) =>
@@ -50,7 +51,7 @@ function groupBy<T>(items: T[], key: (item: T) => string) {
   return groups
 }
 
-function ShowRow({ s, net, setlist, today, agency, mode, strong }: {
+function ShowRow({ s, net, setlist, today, agency, mode, strong, canEdit }: {
   s: Show
   net: number
   setlist: { id: string; title: string } | undefined
@@ -58,13 +59,17 @@ function ShowRow({ s, net, setlist, today, agency, mode, strong }: {
   agency?: string
   mode: 'upcoming' | 'played'
   strong?: boolean
+  canEdit: boolean
 }) {
   const { money: fmt } = useMoney()
   const router = useRouter()
   const isSplit = !!s.split_at
   const meta = [s.venue, agency ? `via ${agency}` : null].filter(Boolean).join(' · ')
+  const next = nextStatus(s.booking_status)
+  const moveNext = () => void setShowStatus(s.id, next).then(r => { if (r?.error) window.alert(r.error); else router.refresh() })
   const menu: MenuItem[] = [
     { label: 'Open', href: `/shows/${s.id}`, icon: CalendarDays },
+    ...(canEdit && next && mode === 'upcoming' ? [{ label: `Move to ${next}`, icon: ArrowRight, onSelect: moveNext }] : []),
     { label: 'Edit', href: `/shows/${s.id}/edit`, icon: Pencil },
     setlist ? { label: 'Open setlist', href: `/setlists/${setlist.id}`, icon: ListMusic } : { label: 'Add setlist', href: `/setlists/new?showId=${s.id}`, icon: Plus },
     { label: 'Delete', icon: Trash2, danger: true, onSelect: () => { if (window.confirm(`Delete "${s.title}"? This can’t be undone.`)) void deleteShow(s.id).then(r => { if (r?.error) window.alert(r.error); else router.refresh() }) } },
@@ -86,7 +91,6 @@ function ShowRow({ s, net, setlist, today, agency, mode, strong }: {
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500">
             {meta && <span className="truncate">{meta}</span>}
             {s.format && <StatusPill tone="gray">{s.format}</StatusPill>}
-            {s.booking_status && mode === 'upcoming' && <StatusPill tone={statusTone(s.booking_status)}>{s.booking_status}</StatusPill>}
             {s.tds_applicable && <StatusPill tone="amber">TDS</StatusPill>}
           </div>
         </div>
@@ -94,13 +98,16 @@ function ShowRow({ s, net, setlist, today, agency, mode, strong }: {
 
       <div className="flex shrink-0 items-center justify-between gap-4 pl-[66px] sm:flex-col sm:items-end sm:justify-center sm:gap-1 sm:pl-0">
         {mode === 'upcoming' ? (
-          setlist ? (
+          <>
+          <ShowStatusMenu key={s.booking_status ?? 'none'} showId={s.id} status={s.booking_status} canEdit={canEdit} className="sm:justify-end" />
+          {setlist ? (
             <Link href={`/setlists/${setlist.id}`} className="max-w-[12rem] truncate text-xs font-semibold text-gray-500 hover:text-brand-600">
               Setlist · {setlist.title}
             </Link>
           ) : (
             <Link href={`/setlists/new?showId=${s.id}`} className="text-xs font-bold text-amber-700 hover:underline">+ Add setlist</Link>
-          )
+          )}
+          </>
         ) : (
           <>
             <span className="text-sm font-bold text-gray-900">{fmt(net)}</span>
@@ -112,7 +119,7 @@ function ShowRow({ s, net, setlist, today, agency, mode, strong }: {
   )
 }
 
-export function ShowSearchList({ shows, netByShow, setlistByShow, today, eventManagementById, insights }: ShowSearchListProps) {
+export function ShowSearchList({ shows, netByShow, setlistByShow, today, eventManagementById, insights, canEditShows = false }: ShowSearchListProps) {
   const [tab, setTab] = useState<Tab>('upcoming')
   const [query, setQuery] = useState('')
   const [format, setFormat] = useState('')
@@ -143,7 +150,7 @@ export function ShowSearchList({ shows, netByShow, setlistByShow, today, eventMa
   const row = (s: Show, mode: 'upcoming' | 'played') => (
     <ShowRow
       key={s.id} s={s} net={netByShow[s.id] ?? 0} setlist={setlistByShow[s.id]} today={today}
-      agency={agencyOf(s)} mode={mode} strong={mode === 'upcoming' && s.id === firstUpcomingId}
+      agency={agencyOf(s)} mode={mode} strong={mode === 'upcoming' && s.id === firstUpcomingId} canEdit={canEditShows}
     />
   )
 

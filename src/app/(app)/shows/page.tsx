@@ -139,6 +139,7 @@ export default async function ShowsPage({ searchParams }: { searchParams: Promis
         <ShowSearchList
           shows={shows} netByShow={netByShow} setlistByShow={setlistByShow} today={today}
           eventManagementById={eventManagementById}
+          canEditShows={wsCtx?.current.sections.shows === 'edit'}
           insights={{ formatBreakdown, revenueByFormat, showsPerYear, topCities }}
         />
       )}
