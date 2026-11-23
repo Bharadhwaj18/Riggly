@@ -2,7 +2,10 @@ import { notFound } from 'next/navigation'
 import { sectionGuard } from '@/lib/section-guard'
 import Link from 'next/link'
 import { ChevronLeft, Pencil, Calendar, MapPin, Link2, Play } from 'lucide-react'
-import { getCachedSetlist, getCachedSetlistSongs, getCachedSongs, getCachedAllProfiles, getCachedUser, getCachedShow } from '@/lib/data'
+import { getCachedSetlist, getCachedSetlistSongs, getCachedSongs, getCachedAllProfiles, getCachedUser, getCachedShow, getCachedShowTypes, getCachedSetlistSongCounts } from '@/lib/data'
+import { getWorkspaceContext } from '@/lib/workspace'
+import { tagCounts } from '@/lib/song-tags'
+import { SuggestedSongs } from '@/components/setlists/SuggestedSongs'
 import { SetlistSongList } from '@/components/setlists/SetlistSongList'
 import { AddSongToSetlistModal } from '@/components/setlists/AddSongToSetlistModal'
 import { BulkImportModal } from '@/components/setlists/BulkImportModal'
@@ -28,12 +31,15 @@ export default async function SetlistPage({ params }: Props) {
   if (denied) return denied
   const { id } = await params
 
-  const [setlist, setlistSongs, allSongs, profiles, { data: { user } }] = await Promise.all([
+  const [setlist, setlistSongs, allSongs, profiles, { data: { user } }, showTypes, usage, ctx] = await Promise.all([
     getCachedSetlist(id),
     getCachedSetlistSongs(id),
     getCachedSongs(),
     getCachedAllProfiles(),
     getCachedUser(),
+    getCachedShowTypes(),
+    getCachedSetlistSongCounts(),
+    getWorkspaceContext(),
   ])
 
   if (!setlist) notFound()
@@ -47,6 +53,9 @@ export default async function SetlistPage({ params }: Props) {
     ? new Date(setlist.show_date + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })
     : null
 
+  // How many other setlists each song is in: the 'most played' order for suggestions.
+  const plays: Record<string, number> = {}
+  for (const row of usage) if (row.setlist_id !== id) plays[row.song_id] = (plays[row.song_id] ?? 0) + 1
   const currentSongIds = setlistSongs.map(ss => ss.song_id)
   const currentSongTitles = setlistSongs.map(ss => ss.song.title)
   const availableSections = [...new Set(
@@ -123,6 +132,7 @@ export default async function SetlistPage({ params }: Props) {
                 allSongs={allSongs}
                 currentSongIds={currentSongIds}
                 availableSections={availableSections}
+                plays={plays}
               />
             </div>
           </div>
@@ -131,6 +141,18 @@ export default async function SetlistPage({ params }: Props) {
           <SetlistSongList
             setlistId={id}
             initialItems={setlistSongs as SetlistSongWithSong[]}
+          />
+
+          <SuggestedSongs
+            setlistId={id}
+            songs={allSongs}
+            currentSongIds={currentSongIds}
+            plays={plays}
+            showTypes={showTypes}
+            showTypeId={setlist.show_type_id}
+            knownTags={tagCounts(allSongs).map(t => t.tag)}
+            section={(setlistSongs[setlistSongs.length - 1] as SetlistSongWithSong | undefined)?.section ?? null}
+            canEdit={ctx?.current.sections.setlists === 'edit'}
           />
         </div>
 

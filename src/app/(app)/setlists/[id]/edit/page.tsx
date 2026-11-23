@@ -3,7 +3,8 @@ import { sectionGuard } from '@/lib/section-guard'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
-import { getCachedSetlistSongs, getCachedSongs, getCachedShow } from '@/lib/data'
+import { getCachedSetlistSongs, getCachedSongs, getCachedShow, getCachedShowTypes } from '@/lib/data'
+import { tagCounts } from '@/lib/song-tags'
 import { SetlistForm } from '@/components/setlists/SetlistForm'
 import { SetlistTextEditor } from '@/components/setlists/SetlistTextEditor'
 import { updateSetlist } from '@/actions/setlists'
@@ -19,10 +20,11 @@ export default async function EditSetlistPage({ params }: Props) {
   if (denied) return denied
   const { id } = await params
   const supabase = await createClient()
-  const [{ data: setlist }, setlistSongs, allSongs] = await Promise.all([
+  const [{ data: setlist }, setlistSongs, allSongs, showTypes] = await Promise.all([
     supabase.from('setlists').select('*').eq('id', id).single(),
     getCachedSetlistSongs(id),
     getCachedSongs(),
+    getCachedShowTypes(),
   ])
 
   if (!setlist) notFound()
@@ -51,6 +53,8 @@ export default async function EditSetlistPage({ params }: Props) {
       <SetlistForm
         setlist={setlist}
         onSubmit={handleUpdate}
+        showTypes={showTypes}
+        knownTags={tagCounts(allSongs).map(t => t.tag)}
         linkedShow={linkedShow ? { id: linkedShow.id, title: linkedShow.title, show_date: linkedShow.show_date, venue: linkedShow.venue } : undefined}
       />
 

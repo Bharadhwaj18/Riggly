@@ -2,11 +2,12 @@ import { SongForm } from '@/components/songs/SongForm'
 import { sectionGuard } from '@/lib/section-guard'
 import { getCachedSongs } from '@/lib/data'
 import { createSong } from '@/actions/songs'
+import { tagCounts } from '@/lib/song-tags'
 
 export default async function NewSongPage() {
   const denied = await sectionGuard('songs')
   if (denied) return denied
   const songs = await getCachedSongs()
   const existing = songs.map(s => ({ id: s.id, title: s.title, artist: s.artist, hasChart: !!s.chord_chart?.trim() }))
-  return <SongForm title="New song" backHref="/songs" backLabel="Songs" onSubmit={createSong} existing={existing} />
+  return <SongForm title="New song" backHref="/songs" backLabel="Songs" onSubmit={createSong} existing={existing} knownTags={tagCounts(songs).map(t => t.tag)} />
 }

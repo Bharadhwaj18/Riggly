@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
+import { matchesTags, tagCounts } from '@/lib/song-tags'
 import { canAutoFocus } from '@/lib/pointer'
 import { Search, Plus, Check, PlusCircle } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
@@ -16,9 +17,11 @@ interface AddSongToSetlistModalProps {
   allSongs: Song[]
   currentSongIds: string[]
   availableSections?: string[]
+  /** In how many setlists each song has been, for ordering a tag search most played first. */
+  plays?: Record<string, number>
 }
 
-export function AddSongToSetlistModal({ setlistId, allSongs, currentSongIds, availableSections = [] }: AddSongToSetlistModalProps) {
+export function AddSongToSetlistModal({ setlistId, allSongs, currentSongIds, availableSections = [], plays = {} }: AddSongToSetlistModalProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [adding, setAdding] = useState<string | null>(null)
@@ -47,8 +50,19 @@ export function AddSongToSetlistModal({ setlistId, allSongs, currentSongIds, ava
 
   const q = query.trim()
 
-  const scored = q
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean)
+  // Songs whose tags match what was typed ("hindi commercial"), most played first, ahead of the title matches.
+  const tagHits = useMemo(
+    () => (q ? localSongs.filter(s => matchesTags(s, words)).sort((a, b) => (plays[b.id] ?? 0) - (plays[a.id] ?? 0) || a.title.localeCompare(b.title)) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [q, localSongs, plays],
+  )
+  const tagHitIds = new Set(tagHits.map(s => s.id))
+  const topTags = useMemo(() => tagCounts(localSongs).slice(0, 10), [localSongs])
+
+  const titleScored = q
     ? localSongs
+        .filter(s => !tagHitIds.has(s.id))
         .map(s => {
           const titleScore = similarity(q, s.title)
           const artistScore = s.artist ? similarity(q, s.artist) * 0.7 : 0
@@ -57,6 +71,7 @@ export function AddSongToSetlistModal({ setlistId, allSongs, currentSongIds, ava
         .filter(x => x.score >= FUZZY_THRESHOLD)
         .sort((a, b) => b.score - a.score)
     : localSongs.map(s => ({ song: s, score: 1 }))
+  const scored = [...tagHits.map(s => ({ song: s, score: 1 })), ...titleScored]
 
   const exactMatch = q
     ? localSongs.some(s => s.title.toLowerCase() === q.toLowerCase())
@@ -142,13 +157,29 @@ export function AddSongToSetlistModal({ setlistId, allSongs, currentSongIds, ava
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-300" />
           <input
             type="text"
-            placeholder="Search songs..."
+            placeholder="Search by title, or a tag like Hindi…"
             value={query}
             onChange={e => setQuery(e.target.value)}
             className="w-full rounded-md border border-brand-200 py-2 pl-9 pr-3 text-sm focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-400"
             autoFocus={canAutoFocus()}
           />
         </div>
+
+        {topTags.length > 0 && (
+          <div className="mb-3 flex flex-wrap gap-1.5">
+            {topTags.map(t => (
+              <button
+                key={t.tag}
+                type="button"
+                onClick={() => setQuery(v => (v.trim().toLowerCase() === t.tag.toLowerCase() ? '' : t.tag))}
+                className={cn('rounded-full px-2.5 py-1 text-xs font-bold transition-colors', q.toLowerCase() === t.tag.toLowerCase() ? 'bg-brand-400 text-white' : 'bg-brand-100 text-brand-700 hover:bg-brand-200')}
+              >
+                {t.tag}
+              </button>
+            ))}
+          </div>
+        )}
+        {tagHits.length > 0 && <p className="mb-1 px-1 text-xs text-gray-500">{tagHits.length} tagged {q} · most played first</p>}
 
         {/* Song list */}
         <div className="max-h-80 overflow-y-auto space-y-1">
@@ -167,6 +198,10 @@ export function AddSongToSetlistModal({ setlistId, allSongs, currentSongIds, ava
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-gray-900">{song.title}</p>
                   {song.artist && <p className="truncate text-xs text-gray-400">{song.artist}</p>}
+                  <p className="flex flex-wrap items-center gap-1 text-[11px] text-gray-400">
+                    {song.tags?.slice(0, 3).map(t => <span key={t} className="rounded bg-gray-100 px-1.5 py-px font-bold text-gray-500">{t}</span>)}
+                    {plays[song.id] ? <span>In {plays[song.id]} setlist{plays[song.id] === 1 ? '' : 's'}</span> : null}
+                  </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   {song.song_key && (

@@ -7,11 +7,12 @@ import { requireWorkspaceId } from '@/lib/workspace'
 import { songDetailsSchema, type SongFormData, type SongDetailsData } from '@/lib/validators'
 import { addSongReference } from '@/actions/song-references'
 import { cleanTitle, pairKey } from '@/lib/song-match'
+import { cleanTag } from '@/lib/song-tags'
 
 /** Just the song's own columns from the form (the link and cover are handled separately). */
 function songColumns(data: SongFormData) {
-  const { title, artist, song_key, bpm, time_signature, chord_chart, notes } = data
-  return { title: cleanTitle(title), artist, song_key, bpm: bpm ?? null, time_signature, chord_chart, notes }
+  const { title, artist, song_key, bpm, time_signature, chord_chart, notes, tags } = data
+  return { title: cleanTitle(title), artist, song_key, bpm: bpm ?? null, time_signature, chord_chart, notes, ...(tags ? { tags: tags.map(cleanTag).filter(Boolean) } : {}) }
 }
 
 export async function createSong(data: SongFormData) {

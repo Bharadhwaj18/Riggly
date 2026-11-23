@@ -5,7 +5,8 @@ import { ChevronLeft, Plus } from 'lucide-react'
 import { SetlistForm } from '@/components/setlists/SetlistForm'
 import { createSetlist } from '@/actions/setlists'
 import { UpcomingShowPicker } from '@/components/setlists/UpcomingShowPicker'
-import { getCachedShow, getCachedShows, getCachedSetlistsByShow } from '@/lib/data'
+import { getCachedShow, getCachedShows, getCachedSetlistsByShow, getCachedShowTypes, getCachedSongs } from '@/lib/data'
+import { tagCounts } from '@/lib/song-tags'
 import { todayISO, isUpcoming } from '@/lib/shows'
 
 interface Props {
@@ -60,6 +61,7 @@ export default async function NewSetlistPage({ searchParams }: Props) {
     )
   }
 
+  const [showTypes, songs] = await Promise.all([getCachedShowTypes(), getCachedSongs()])
   return (
     <div className="max-w-xl">
       <Link href={show ? `/shows/${show.id}` : '/setlists'} className="mb-6 inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
@@ -68,7 +70,7 @@ export default async function NewSetlistPage({ searchParams }: Props) {
       <h1 className="mb-1 text-3xl font-bold text-gray-900">New setlist</h1>
       {show && <p className="mb-7 text-sm text-gray-500">For the show &ldquo;{show.title}&rdquo;</p>}
       {!show && <div className="mb-7" />}
-      <SetlistForm onSubmit={createSetlist} linkedShow={show ? { id: show.id, title: show.title, show_date: show.show_date, venue: show.venue } : undefined} />
+      <SetlistForm onSubmit={createSetlist} showTypes={showTypes} knownTags={tagCounts(songs).map(t => t.tag)} linkedShow={show ? { id: show.id, title: show.title, show_date: show.show_date, venue: show.venue } : undefined} />
     </div>
   )
 }

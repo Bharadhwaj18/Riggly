@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button'
 import { Select } from '@/components/ui/Select'
 import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
+import { TagInput } from '@/components/ui/TagInput'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { SectionLabel } from '@/components/ui/SectionLabel'
 import { ChordEditor } from './ChordEditor'
@@ -25,6 +26,8 @@ import type { ReferenceDetails } from '@/lib/reference-lookup'
 interface SongFormProps {
   song?: Song
   /** Songs already in the library, so a new song can warn about copies of itself. */
+  /** Tags used on other songs, offered as one-tap picks. */
+  knownTags?: string[]
   existing?: { id: string; title: string; artist: string | null; hasChart: boolean }[]
   onSubmit: (data: SongFormData) => Promise<void>
   title: string
@@ -35,7 +38,7 @@ interface SongFormProps {
 const selectClass =
   'mt-1 w-full rounded-md border border-brand-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-400'
 
-export function SongForm({ song, existing, onSubmit, title, backHref, backLabel }: SongFormProps) {
+export function SongForm({ song, existing, knownTags, onSubmit, title, backHref, backLabel }: SongFormProps) {
   const [isPending, startTransition] = useTransition()
 
   const { register, handleSubmit, control, setValue, getValues, formState: { errors } } = useForm<SongFormData>({
@@ -48,6 +51,7 @@ export function SongForm({ song, existing, onSubmit, title, backHref, backLabel 
       time_signature: song?.time_signature ?? '4/4',
       chord_chart: song?.chord_chart ?? '',
       notes: song?.notes ?? '',
+      tags: song?.tags ?? [],
     },
   })
   const chart = useWatch({ control, name: 'chord_chart' }) ?? ''
@@ -146,6 +150,14 @@ export function SongForm({ song, existing, onSubmit, title, backHref, backLabel 
               {TIME_SIGNATURES.map(ts => <option key={ts} value={ts}>{ts}</option>)}
             </Select>
           )} />
+        </div>
+        <div className="col-span-2 sm:col-span-6">
+          <Label htmlFor="tags">Tags</Label>
+          <div className="mt-1">
+            <Controller name="tags" control={control} render={({ field }) => (
+              <TagInput id="tags" value={field.value ?? []} onChange={field.onChange} known={knownTags} placeholder="Language, style, male or female…" />
+            )} />
+          </div>
         </div>
         <div className="col-span-2 sm:col-span-6">
           <Label htmlFor="notes">Band notes</Label>

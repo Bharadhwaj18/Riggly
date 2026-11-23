@@ -1,13 +1,14 @@
 'use client'
 
 import { useTransition } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link2 } from 'lucide-react'
 import { setlistSchema, type SetlistFormData } from '@/lib/validators'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
+import { ShowTypeField, type ShowTypeRow } from './ShowTypeField'
 import type { Setlist } from '@/types'
 
 interface LinkedShow { id: string; title: string; show_date: string | null; venue: string | null }
@@ -16,12 +17,15 @@ interface SetlistFormProps {
   onSubmit: (data: SetlistFormData) => Promise<void>
   /** Present when creating a setlist from a show's own page — pre-fills date/venue from the show and carries show_id through on submit. */
   linkedShow?: LinkedShow
+  showTypes?: ShowTypeRow[]
+  /** Tags used on songs, offered when setting up a kind of show. */
+  knownTags?: string[]
 }
 
-export function SetlistForm({ setlist, onSubmit, linkedShow }: SetlistFormProps) {
+export function SetlistForm({ setlist, onSubmit, linkedShow, showTypes = [], knownTags = [] }: SetlistFormProps) {
   const [isPending, startTransition] = useTransition()
 
-  const { register, handleSubmit, formState: { errors } } = useForm<SetlistFormData>({
+  const { register, handleSubmit, control, formState: { errors } } = useForm<SetlistFormData>({
     resolver: zodResolver(setlistSchema),
     defaultValues: {
       title: setlist?.title ?? (linkedShow ? linkedShow.title : ''),
@@ -29,6 +33,7 @@ export function SetlistForm({ setlist, onSubmit, linkedShow }: SetlistFormProps)
       venue: setlist?.venue ?? linkedShow?.venue ?? '',
       notes: setlist?.notes ?? '',
       show_id: setlist?.show_id ?? linkedShow?.id ?? null,
+      show_type_id: setlist?.show_type_id ?? null,
     },
   })
 
@@ -57,6 +62,15 @@ export function SetlistForm({ setlist, onSubmit, linkedShow }: SetlistFormProps)
           <Label htmlFor="venue">Venue</Label>
           <Input id="venue" placeholder="Blue Frog" className="mt-1" {...register('venue')} />
         </div>
+      </div>
+      <div>
+        <Label>Type of show</Label>
+        <div className="mt-1">
+          <Controller name="show_type_id" control={control} render={({ field }) => (
+            <ShowTypeField types={showTypes} value={field.value ?? null} onChange={field.onChange} knownTags={knownTags} />
+          )} />
+        </div>
+        <p className="mt-1 text-xs text-gray-500">Pick one and the setlist suggests songs that suit it.</p>
       </div>
       <div>
         <Label htmlFor="notes">Notes</Label>

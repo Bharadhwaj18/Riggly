@@ -87,6 +87,33 @@ export type Database = {
         }
         Relationships: []
       }
+      show_types: {
+        Row: {
+          id: string
+          workspace_id: string
+          name: string
+          tags: string[]
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          workspace_id: string
+          name: string
+          tags?: string[]
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          workspace_id?: string
+          name?: string
+          tags?: string[]
+          created_by?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       song_not_duplicates: {
         Row: {
           workspace_id: string
@@ -194,6 +221,7 @@ export type Database = {
       }
       songs: {
         Row: {
+          tags: string[]
           workspace_id: string | null
           id: string
           created_by: string
@@ -210,6 +238,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          tags?: string[]
           workspace_id?: string | null
           id?: string
           created_by: string
@@ -226,6 +255,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          tags?: string[]
           workspace_id?: string | null
           id?: string
           created_by?: string
@@ -245,6 +275,7 @@ export type Database = {
       }
       setlists: {
         Row: {
+          show_type_id: string | null
           workspace_id: string | null
           id: string
           created_by: string
@@ -258,6 +289,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          show_type_id?: string | null
           workspace_id?: string | null
           id?: string
           created_by: string
@@ -271,6 +303,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          show_type_id?: string | null
           workspace_id?: string | null
           id?: string
           created_by?: string

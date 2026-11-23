@@ -25,6 +25,11 @@ export const getCachedSongs = cache(() =>
   inWorkspace((supabase, ws) => supabase.from('songs').select('*').eq('workspace_id', ws).order('title'))
 )
 
+// The kinds of show this workspace plays, with the song tags that fit each.
+export const getCachedShowTypes = cache(() =>
+  inWorkspace((supabase, ws) => supabase.from('show_types').select('*').eq('workspace_id', ws).order('name'))
+)
+
 export const getCachedSetlists = cache(() =>
   inWorkspace((supabase, ws) =>
     supabase.from('setlists').select('*').eq('workspace_id', ws).order('show_date', { ascending: false, nullsFirst: false })

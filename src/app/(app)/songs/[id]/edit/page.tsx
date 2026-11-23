@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation'
 import { sectionGuard } from '@/lib/section-guard'
 import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
+import { getCachedSongs } from '@/lib/data'
+import { tagCounts } from '@/lib/song-tags'
 import { SongForm } from '@/components/songs/SongForm'
 import { updateSong } from '@/actions/songs'
 import { ACTIVE_SETLIST_COOKIE } from '@/lib/setlist-context'
@@ -45,5 +47,6 @@ export default async function EditSongPage({ params, searchParams }: Props) {
     ? `/songs/${id}?from=${encodeURIComponent(canonicalFrom)}`
     : `/songs/${id}`
 
-  return <SongForm song={song} title="Edit song" backHref={backHref} backLabel={song.title} onSubmit={handleUpdate} />
+  const knownTags = tagCounts(await getCachedSongs()).map(t => t.tag)
+  return <SongForm song={song} knownTags={knownTags} title="Edit song" backHref={backHref} backLabel={song.title} onSubmit={handleUpdate} />
 }

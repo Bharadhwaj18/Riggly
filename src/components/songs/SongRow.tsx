@@ -43,6 +43,11 @@ export function SongRow({ song, setlistCount, playable, coverLink }: SongRowProp
       <div className="min-w-0 flex-1">
         <p className="truncate font-bold text-gray-900">{song.title}</p>
         {song.artist && <p className="truncate text-xs text-gray-500">{song.artist}</p>}
+        {song.tags?.length > 0 && (
+          <p className="mt-0.5 flex flex-wrap gap-1">
+            {song.tags.slice(0, 4).map(t => <span key={t} className="rounded bg-gray-100 px-1.5 py-px text-[10px] font-bold text-gray-500">{t}</span>)}
+          </p>
+        )}
       </div>
       {!song.chord_chart && <StatusPill tone="amber">No chart</StatusPill>}
       {song.song_key && (
