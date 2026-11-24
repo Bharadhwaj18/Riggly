@@ -35,6 +35,10 @@ export async function GET(request: NextRequest) {
   type Row = { recipient_id: string; workspace_id: string; title: string; body: string | null; link: string; type: string; dedupe_key: string }
   const rows: Row[] = []
 
+  // Demo bands are sample data: never remind anyone about them.
+  const { data: demoRows } = await supabase.from('workspaces').select('id').eq('settings->demo', true)
+  const demoIds = new Set((demoRows ?? []).map(w => w.id))
+
   const { data: dueTasks, error: tasksErr } = await supabase
     .from('tasks')
     .select('id, workspace_id, title, created_by, due_date, remind_days_before, assignee_ids')
@@ -45,6 +49,7 @@ export async function GET(request: NextRequest) {
   if (tasksErr) return NextResponse.json({ error: tasksErr.message }, { status: 500 })
 
   for (const task of dueTasks ?? []) {
+    if (demoIds.has(task.workspace_id)) continue
     if (addDaysISO(task.due_date!, -task.remind_days_before!) !== today) continue
     const recipientIds = task.assignee_ids.length ? task.assignee_ids : [task.created_by]
     const dueLabel = task.due_date === today ? 'today' : `on ${formatDateDMY(task.due_date!)}`
@@ -69,7 +74,7 @@ export async function GET(request: NextRequest) {
     .select('id, title, show_date, venue, workspace_id')
     .in('show_date', [today, addDaysISO(today, 3)])
   if (showsErr) return NextResponse.json({ error: showsErr.message }, { status: 500 })
-  const upcomingShows = (showRows ?? []).filter((s): s is typeof s & { workspace_id: string } => !!s.workspace_id)
+  const upcomingShows = (showRows ?? []).filter((s): s is typeof s & { workspace_id: string } => !!s.workspace_id && !demoIds.has(s.workspace_id))
 
   if (upcomingShows.length) {
     const { data: members, error: membersErr } = await supabase

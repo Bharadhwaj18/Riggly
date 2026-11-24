@@ -2,6 +2,7 @@ import { cache } from 'react'
 import { isMerchCrewRow } from '@/lib/merch-crew'
 import { createClient } from '@/lib/supabase/server'
 import { getWorkspaceContext } from '@/lib/workspace'
+import { visibleFrom, withoutDemos } from '@/lib/demo'
 import type { TaskData } from '@/types/tasks'
 import { seesFrom, type GroupNote, type WorkspaceGroup } from '@/lib/groups'
 import { toAccount, type FinanceAccount } from '@/lib/finance/accounts'
@@ -234,16 +235,18 @@ export const getCachedPendingPayments = cache(() =>
 )
 
 // A profile's own notifications, newest first — reused for both the
-// Sidebar bell's unread badge and the full inbox page.
+// Sidebar bell's unread badge and the full inbox page. A demo band's only
+// show inside it, and real ones don't show inside a demo band.
 export const getCachedNotifications = cache(async (recipientId: string, limit?: number) => {
-  const supabase = await createClient()
+  const [supabase, ctx] = await Promise.all([createClient(), getWorkspaceContext()])
   const query = supabase
     .from('notifications')
     .select('*')
     .eq('recipient_id', recipientId)
     .order('created_at', { ascending: false })
-  const { data } = await (limit ? query.limit(limit) : query)
-  return data ?? []
+  const { data } = await (limit ? query.limit(limit * 2) : query)
+  const rows = ctx ? (data ?? []).filter(n => visibleFrom(ctx.memberships, ctx.current.workspace.id, n.workspace_id)) : data ?? []
+  return limit ? rows.slice(0, limit) : rows
 })
 
 // Every member-unavailability range — small table, the Calendar just
@@ -283,7 +286,7 @@ export const getCachedAllCalendars = cache(async () => {
   const ctx = await getWorkspaceContext()
   if (!ctx) return null
   // Only workspaces where the calendar isn't hidden from you; shows and tasks also need their own section.
-  const open = ctx.memberships.filter(m => m.sections.calendar !== 'none')
+  const open = withoutDemos(ctx.memberships, ctx.current.workspace.id).filter(m => m.sections.calendar !== 'none')
   const ids = open.map(m => m.workspace.id)
   const showIds = open.filter(m => m.sections.shows !== 'none').map(m => m.workspace.id)
   const taskIds = open.filter(m => m.sections.tasks !== 'none').map(m => m.workspace.id)
@@ -314,7 +317,7 @@ const workspaceTitle = (m: { workspace: { type: string; name: string } }) => (m.
 export const getCachedPersonalTasks = cache(async (): Promise<PersonalTask[]> => {
   const ctx = await getWorkspaceContext()
   if (!ctx) return []
-  const open = ctx.memberships.filter(m => m.sections.tasks !== 'none')
+  const open = withoutDemos(ctx.memberships, ctx.current.workspace.id).filter(m => m.sections.tasks !== 'none')
   if (open.length === 0) return []
   const ids = open.map(m => m.workspace.id)
   const supabase = await createClient()
@@ -333,7 +336,7 @@ export const getCachedPersonalTasks = cache(async (): Promise<PersonalTask[]> =>
 export const getCachedPersonalShows = cache(async (): Promise<PersonalShow[]> => {
   const ctx = await getWorkspaceContext()
   if (!ctx) return []
-  const open = ctx.memberships.filter(m => m.sections.shows !== 'none')
+  const open = withoutDemos(ctx.memberships, ctx.current.workspace.id).filter(m => m.sections.shows !== 'none')
   if (open.length === 0) return []
   const supabase = await createClient()
   const { data } = await supabase.from('shows').select('id, title, show_date, venue, workspace_id').in('workspace_id', open.map(m => m.workspace.id))
@@ -347,7 +350,7 @@ export interface PersonalNote { id: string; title: string; dueDate: string | nul
 export const getCachedPersonalSetlists = cache(async (): Promise<PersonalShow[]> => {
   const ctx = await getWorkspaceContext()
   if (!ctx) return []
-  const open = ctx.memberships.filter(m => m.sections.setlists !== 'none')
+  const open = withoutDemos(ctx.memberships, ctx.current.workspace.id).filter(m => m.sections.setlists !== 'none')
   if (open.length === 0) return []
   const supabase = await createClient()
   const { data } = await supabase.from('setlists').select('id, title, show_date, venue, workspace_id').in('workspace_id', open.map(m => m.workspace.id))
@@ -359,7 +362,7 @@ export const getCachedPersonalSetlists = cache(async (): Promise<PersonalShow[]>
 export const getCachedPersonalNotes = cache(async (): Promise<PersonalNote[]> => {
   const ctx = await getWorkspaceContext()
   if (!ctx) return []
-  const open = ctx.memberships.filter(m => m.sections.notes !== 'none')
+  const open = withoutDemos(ctx.memberships, ctx.current.workspace.id).filter(m => m.sections.notes !== 'none')
   if (open.length === 0) return []
   const supabase = await createClient()
   const { data } = await supabase.from('notes').select('id, title, due_date, workspace_id')
@@ -389,7 +392,7 @@ export interface PersonalFinance { holdings: PersonalHolding[]; owe: PersonalPay
 export const getCachedPersonalFinance = cache(async (): Promise<PersonalFinance | null> => {
   const ctx = await getWorkspaceContext()
   if (!ctx) return null
-  const open = ctx.memberships.filter(m => m.workspace.type !== 'personal' && m.sections.finance !== 'none')
+  const open = withoutDemos(ctx.memberships, ctx.current.workspace.id).filter(m => m.workspace.type !== 'personal' && m.sections.finance !== 'none')
   if (open.length === 0) return { holdings: [], owe: [], owed: [] }
   const ids = open.map(m => m.workspace.id)
   const me = ctx.userId
