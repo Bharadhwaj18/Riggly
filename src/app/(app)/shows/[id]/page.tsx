@@ -57,7 +57,7 @@ export default async function ShowDetailPage({ params }: Props) {
     supabase.from('setlists').select('id, title').eq('show_id', id).maybeSingle(),
     supabase.from('show_documents').select('*').eq('show_id', id).order('created_at', { ascending: false }),
     getWorkspaceContext(),
-    supabase.from('merch_sales').select('status, cash_amount, upi_amount, card_amount').eq('show_id', id),
+    supabase.from('merch_sales').select('status, cash_amount, upi_amount, card_amount, online_amount').eq('show_id', id),
     supabase.from('merch_stock_moves').select('qty, reason').eq('show_id', id).in('reason', ['sale', 'giveaway']),
     supabase.from('merch_kits').select('id, status').eq('show_id', id).maybeSingle(),
   ])

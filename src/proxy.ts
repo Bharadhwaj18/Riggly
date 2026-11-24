@@ -11,6 +11,7 @@ export const config = {
     // cron invoker has no logged-in session), and would otherwise get
     // redirected to /login by this proxy before its own auth check runs.
     // api/mobile/* is excluded too: the phone app signs each request with a token, not a cookie session.
-    '/((?!_next/static|_next/image|favicon.ico|manifest.json|icons/.*|api/cron/.*|api/mobile/.*|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    // api/store/* is the band website talking to Rigly server to server, signed with STORE_API_KEY.
+    '/((?!_next/static|_next/image|favicon.ico|manifest.json|icons/.*|api/cron/.*|api/mobile/.*|api/store/.*|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

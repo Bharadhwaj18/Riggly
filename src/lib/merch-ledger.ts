@@ -29,7 +29,7 @@ export interface LedgerRow {
   heldBy: string | null
   /** Money taken (sales) or spent (restocks). */
   money: number | null
-  payment: { cash: number; upi: number; card: number } | null
+  payment: { cash: number; upi: number; card: number; online: number } | null
   status: 'pending' | 'approved' | null
   note: string | null
   supplier: string | null
@@ -39,7 +39,7 @@ export interface LedgerRow {
 }
 
 type MoveIn = Pick<MerchMove, 'id' | 'variant_id' | 'qty' | 'reason' | 'date' | 'created_at' | 'sale_id' | 'batch_id' | 'kit_id' | 'note' | 'unit_price'> & { show?: ShowRef }
-type SaleIn = Pick<MerchSale, 'id' | 'date' | 'created_at' | 'show_id' | 'kit_id' | 'created_by' | 'held_by' | 'status' | 'notes' | 'cash_amount' | 'upi_amount' | 'card_amount'> & { show?: ShowRef }
+type SaleIn = Pick<MerchSale, 'id' | 'date' | 'created_at' | 'show_id' | 'kit_id' | 'created_by' | 'held_by' | 'status' | 'notes' | 'cash_amount' | 'upi_amount' | 'card_amount'> & { online_amount?: number | null; show?: ShowRef }
 
 export function buildMerchLedger({ moves, sales, batches, variants, kitShows }: {
   moves: MoveIn[]
@@ -78,7 +78,7 @@ export function buildMerchLedger({ moves, sales, batches, variants, kitShows }: 
       ...base, key: `sale-${s.id}`, kind: 'sale', date: s.date, created: s.created_at,
       units: ms.reduce((n, m) => n + m.qty, 0), lines: ms.map(m => line(m, -1)),
       showId: show?.id ?? null, showTitle: show?.title ?? null, personId: s.created_by, heldBy: s.held_by,
-      money: saleTakings(s), payment: { cash: Number(s.cash_amount), upi: Number(s.upi_amount), card: Number(s.card_amount) },
+      money: saleTakings(s), payment: { cash: Number(s.cash_amount), upi: Number(s.upi_amount), card: Number(s.card_amount), online: Number(s.online_amount ?? 0) },
       status: s.status === 'approved' ? 'approved' : 'pending', note: s.notes, kitId: s.kit_id,
       ref: { type: 'sale', id: s.id },
     })

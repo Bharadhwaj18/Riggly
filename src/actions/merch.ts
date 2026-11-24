@@ -446,7 +446,7 @@ export async function rejectMerchSale(id: string, reason: string): Promise<Resul
   if (!user) return { error: 'Not signed in' }
   const ctx = await getWorkspaceContext()
   if (!ctx || !isMerchApprover(ctx.current)) return { error: 'Only an admin or someone with the Merch role can turn sales down.' }
-  const { data: sale } = await supabase.from('merch_sales').select('status, show_id, created_by, cash_amount, upi_amount, card_amount').eq('id', id).maybeSingle()
+  const { data: sale } = await supabase.from('merch_sales').select('status, show_id, created_by, cash_amount, upi_amount, card_amount, online_amount').eq('id', id).maybeSingle()
   if (!sale) return { error: 'That sale is already gone.' }
   if (sale.status !== 'pending') return { error: 'This sale is already approved.' }
   const { error } = await supabase.from('merch_sales').delete().eq('id', id)
@@ -477,7 +477,7 @@ export async function approveMerchSales(saleIds: string[], to: { memberId?: stri
   if (!ctx || !isMerchApprover(ctx.current)) return { error: 'Only an admin or someone with the Merch role can approve merch takings.' }
   if (to.accountId && !(await getCachedFinanceSettings()).features.accounts) return { error: 'Band accounts are switched off for this workspace.' }
 
-  const { data: sales } = await supabase.from('merch_sales').select('created_by, show_id, cash_amount, upi_amount, card_amount').in('id', saleIds)
+  const { data: sales } = await supabase.from('merch_sales').select('created_by, show_id, cash_amount, upi_amount, card_amount, online_amount').in('id', saleIds)
   if (amount != null && (!Number.isFinite(Number(amount)) || Number(amount) < 0)) return { error: 'Enter an amount of 0 or more.' }
   const { data: txId, error } = await supabase.rpc('approve_merch_sales', { p_ids: saleIds, p_member: to.memberId || null, p_account: to.accountId || null, p_amount: amount == null ? null : Math.round(Number(amount) * 100) / 100 })
   if (error) return { error: friendly(error.message) }

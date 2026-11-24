@@ -34,6 +34,7 @@ export default async function MerchPage() {
       userId={user?.id ?? ''}
       workspaceId={ctx.current.workspace.id}
       proofsBySale={merch.proofsBySale}
+      onlineOrders={merch.onlineOrders}
     />
   )
 }

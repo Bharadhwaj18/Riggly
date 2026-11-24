@@ -175,7 +175,7 @@ export function MerchLedger({ items, variants, moves, sales, batches, kits, memb
         <div className="space-y-1">
           {visible.map((r, i) => {
             const header = r.date !== visible[i - 1]?.date ? <SectionLabel className="pb-1 pt-3">{formatDateDMY(r.date)}</SectionLabel> : null
-            const pay = r.payment ? [r.payment.cash && `${money(r.payment.cash)} cash`, r.payment.upi && `${money(r.payment.upi)} UPI`, r.payment.card && `${money(r.payment.card)} card`].filter(Boolean).join(' · ') : null
+            const pay = r.payment ? [r.payment.cash && `${money(r.payment.cash)} cash`, r.payment.upi && `${money(r.payment.upi)} UPI`, r.payment.card && `${money(r.payment.card)} card`, r.payment.online && `${money(r.payment.online)} online`].filter(Boolean).join(' · ') : null
             return (
               <div key={r.key}>
                 {header}

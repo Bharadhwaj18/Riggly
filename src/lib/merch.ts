@@ -145,12 +145,12 @@ const round2 = (n: number) => Math.round(n * 100) / 100
 // ---- Sales ---------------------------------------------------------------------------------------------------------
 
 export type MerchSale = Database['public']['Tables']['merch_sales']['Row']
-export type SaleMode = 'count' | 'stall' | 'manual'
+export type SaleMode = 'count' | 'stall' | 'manual' | 'online'
 export type PaymentMethod = 'cash' | 'upi' | 'card'
 
-/** Money taken on a sale, all payment methods together. */
-export const saleTakings = (s: Pick<MerchSale, 'cash_amount' | 'upi_amount' | 'card_amount'>): number =>
-  round2(Number(s.cash_amount) + Number(s.upi_amount) + Number(s.card_amount))
+/** Money taken on a sale, all payment methods together (website orders are paid online). */
+export const saleTakings = (s: Pick<MerchSale, 'cash_amount' | 'upi_amount' | 'card_amount'> & { online_amount?: number | null }): number =>
+  round2(Number(s.cash_amount) + Number(s.upi_amount) + Number(s.card_amount) + Number(s.online_amount ?? 0))
 
 /** What the units should have brought in at their prices. */
 export const expectedTotal = (lines: { qty: number; price: number }[]): number =>

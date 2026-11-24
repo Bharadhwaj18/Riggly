@@ -88,6 +88,8 @@ describe('small helpers', () => {
 describe('sales helpers', () => {
   it('adds up takings across payment methods', () => {
     expect(saleTakings({ cash_amount: 1000, upi_amount: 1500.5, card_amount: 0 })).toBe(2500.5)
+    // Website orders are paid online and count the same way
+    expect(saleTakings({ cash_amount: 0, upi_amount: 0, card_amount: 0, online_amount: 899 })).toBe(899)
   })
   it('works out what units should have brought in', () => {
     expect(expectedTotal([{ qty: 3, price: 500 }, { qty: 2, price: 200 }, { qty: -1, price: 100 }])).toBe(1900)

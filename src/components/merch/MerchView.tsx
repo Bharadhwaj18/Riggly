@@ -23,6 +23,7 @@ import { PendingApprovals, type AccountOption, type Person, type SaleWithShow } 
 import { type KitWithShow } from './Kits'
 import { MerchReports } from './MerchReports'
 import { MerchLedger } from './MerchLedger'
+import { OnlineOrders, type OnlineOrder } from './OnlineOrders'
 
 type MoveWithShow = MerchMove & { show: { id: string; title: string; show_date: string | null } | null }
 
@@ -44,12 +45,14 @@ interface Props {
   workspaceId: string
   /** UPI payment photos for each sale this person may see. */
   proofsBySale: Record<string, string[]>
+  /** Orders paid on the band website (only approvers can see them). */
+  onlineOrders: OnlineOrder[]
 }
 
-type Tab = 'stock' | 'shows' | 'activity'
+type Tab = 'stock' | 'shows' | 'online' | 'activity'
 type Stats = ReturnType<typeof statsByVariant>
 
-export function MerchView({ items, variants, moves, batches, shows, sales, kits, kitLines, members, accounts, canEdit, canApprove, userId, workspaceId, proofsBySale }: Props) {
+export function MerchView({ items, variants, moves, batches, shows, sales, kits, kitLines, members, accounts, canEdit, canApprove, userId, workspaceId, proofsBySale, onlineOrders }: Props) {
   const { money } = useMoney()
   const [tab, setTab] = useState<Tab>('stock')
   const [showArchived, setShowArchived] = useState(false)
@@ -85,6 +88,9 @@ export function MerchView({ items, variants, moves, batches, shows, sales, kits,
   const nextKit = nextShow ? kits.find(k => k.show?.id === nextShow.id) ?? null : null
 
   const shownItems = showArchived ? archivedItems : activeItems
+  // Website orders appear for the people who ship them, once the website has sent one.
+  const showOnline = canApprove && onlineOrders.length > 0
+  const toShip = onlineOrders.filter(o => o.status === 'paid').length
   const openItem = items.find(i => i.id === openItemId) ?? null
 
   return (
@@ -124,7 +130,7 @@ export function MerchView({ items, variants, moves, batches, shows, sales, kits,
             <Tile label="Takings" value={money(totals.revenue)} sub="all time" />
           </div>
 
-          <SegmentedTabs className="mb-4" value={tab} onChange={setTab} tabs={[{ value: 'stock', label: 'Stock' }, { value: 'shows', label: 'Shows' }, { value: 'activity', label: 'History' }]} />
+          <SegmentedTabs className="mb-4" value={tab} onChange={setTab} tabs={[{ value: 'stock', label: 'Stock' }, { value: 'shows', label: 'Shows' }, ...(showOnline ? [{ value: 'online' as const, label: toShip ? `Online (${toShip})` : 'Online' }] : []), { value: 'activity', label: 'History' }]} />
 
           {tab === 'stock' ? (
             <div className="space-y-4">
@@ -149,6 +155,8 @@ export function MerchView({ items, variants, moves, batches, shows, sales, kits,
             </div>
           ) : tab === 'shows' ? (
             <ShowsTab kits={kits} moves={moves} sales={sales} items={items} variants={variants} />
+          ) : tab === 'online' && showOnline ? (
+            <OnlineOrders orders={onlineOrders} canAct={canApprove} />
           ) : (
             <MerchLedger items={items} variants={variants} moves={moves} sales={sales} batches={batches} kits={kits} members={members} proofsBySale={proofsBySale} canEdit={canEdit} canApprove={canApprove} userId={userId} />
           )}

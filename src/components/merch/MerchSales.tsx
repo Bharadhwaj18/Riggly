@@ -36,7 +36,8 @@ function paymentLine(sales: SaleWithShow[], money: (n: number) => string) {
   const cash = sales.reduce((n, s) => n + Number(s.cash_amount), 0)
   const upi = sales.reduce((n, s) => n + Number(s.upi_amount), 0)
   const card = sales.reduce((n, s) => n + Number(s.card_amount), 0)
-  return [cash && `${money(cash)} cash`, upi && `${money(upi)} UPI`, card && `${money(card)} card`].filter(Boolean).join(' · ') || 'No money taken'
+  const online = sales.reduce((n, s) => n + Number(s.online_amount ?? 0), 0)
+  return [cash && `${money(cash)} cash`, upi && `${money(upi)} UPI`, card && `${money(card)} card`, online && `${money(online)} online`].filter(Boolean).join(' · ') || 'No money taken'
 }
 
 /** Sales waiting for approval, one card per show. Approvers approve the whole show at once (one Finance entry). */
@@ -133,10 +134,10 @@ function SaleRows({ sales, members, canApprove, userId, proofsBySale }: { sales:
       {sales.map(s => (
         <li key={s.id} className="flex items-center gap-2 text-xs text-gray-600">
           <span className="min-w-0 flex-1 truncate">
-            {money(saleTakings(s))} · {s.mode === 'count' ? 'count' : 'stall'} · recorded by {nameOf(s.created_by)}, money with {nameOf(s.held_by)}{s.notes ? ` · ${s.notes}` : ''}
+            {money(saleTakings(s))} · {s.mode === 'online' ? 'website order' : s.mode === 'count' ? 'count' : 'stall'} · {s.mode === 'online' ? 'paid online' : `recorded by ${nameOf(s.created_by)}`}, money with {nameOf(s.held_by)}{s.notes ? ` · ${s.notes}` : ''}
           </span>
           <UpiProofLink paths={proofsBySale[s.id] ?? []} />
-          {(canApprove || s.created_by === userId) && (
+          {s.mode !== 'online' && (canApprove || s.created_by === userId) && (
             <button type="button" onClick={() => act(s)} aria-label={canApprove ? 'Turn this sale down' : 'Delete this sale'} title={canApprove ? 'Turn down' : 'Delete'}
               className="rounded-md p-1 text-gray-500 hover:bg-brand-100 hover:text-gray-900">
               <X className="h-3.5 w-3.5" />

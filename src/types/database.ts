@@ -1768,6 +1768,87 @@ export type Database = {
         }
         Relationships: []
       }
+      merch_online_orders: {
+        Row: {
+          id: string
+          workspace_id: string
+          website_order_id: string
+          sale_id: string | null
+          status: string
+          customer_name: string
+          email: string | null
+          phone: string | null
+          address: string | null
+          city: string | null
+          state: string | null
+          pincode: string | null
+          lines: Json
+          total: number
+          payment_ref: string | null
+          paid_at: string
+          stock_short: boolean
+          tracking_number: string | null
+          shipped_at: string | null
+          cancelled_at: string | null
+          cancel_reason: string | null
+          refund_in_finance: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          workspace_id: string
+          website_order_id: string
+          sale_id?: string | null
+          status?: string
+          customer_name: string
+          email?: string | null
+          phone?: string | null
+          address?: string | null
+          city?: string | null
+          state?: string | null
+          pincode?: string | null
+          lines?: Json
+          total: number
+          payment_ref?: string | null
+          paid_at?: string
+          stock_short?: boolean
+          tracking_number?: string | null
+          shipped_at?: string | null
+          cancelled_at?: string | null
+          cancel_reason?: string | null
+          refund_in_finance?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          workspace_id?: string
+          website_order_id?: string
+          sale_id?: string | null
+          status?: string
+          customer_name?: string
+          email?: string | null
+          phone?: string | null
+          address?: string | null
+          city?: string | null
+          state?: string | null
+          pincode?: string | null
+          lines?: Json
+          total?: number
+          payment_ref?: string | null
+          paid_at?: string
+          stock_short?: boolean
+          tracking_number?: string | null
+          shipped_at?: string | null
+          cancelled_at?: string | null
+          cancel_reason?: string | null
+          refund_in_finance?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       merch_sales: {
         Row: {
           approved_amount: number | null
@@ -1780,6 +1861,7 @@ export type Database = {
           cash_amount: number
           upi_amount: number
           card_amount: number
+          online_amount: number
           held_by: string | null
           account_id: string | null
           finance_transaction_id: string | null
@@ -1801,6 +1883,7 @@ export type Database = {
           cash_amount?: number
           upi_amount?: number
           card_amount?: number
+          online_amount?: number
           held_by?: string | null
           account_id?: string | null
           finance_transaction_id?: string | null
@@ -1822,6 +1905,7 @@ export type Database = {
           cash_amount?: number
           upi_amount?: number
           card_amount?: number
+          online_amount?: number
           held_by?: string | null
           account_id?: string | null
           finance_transaction_id?: string | null
@@ -2056,6 +2140,18 @@ export type Database = {
       admin_set_workspace_features: {
         Args: { p_workspace: string; p_features: Json }
         Returns: undefined
+      }
+      merch_online_stock: {
+        Args: { p_ws: string }
+        Returns: { item_id: string; item_name: string; item_kind: string | null; variant_id: string; label: string; variant_position: number; stock: number; in_kits: number; available: number }[]
+      }
+      record_online_order: {
+        Args: { p_ws: string; p_order: Json; p_holder?: string }
+        Returns: Json
+      }
+      set_online_order_status: {
+        Args: { p_ws: string; p_website_order_id: string; p_status: string; p_tracking?: string; p_reason?: string }
+        Returns: Json
       }
       delete_merch_sale: {
         Args: { p_sale: string }
