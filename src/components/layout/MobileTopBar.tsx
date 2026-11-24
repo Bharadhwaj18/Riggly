@@ -8,6 +8,7 @@ import { WorkspaceAvatar } from '@/components/ui/WorkspaceAvatar'
 import { todayISO } from '@/lib/shows'
 import { attentionBadge, isPersonal, roleLabel, workspaceLabel, type WorkspaceOption } from '@/lib/workspace-options'
 import { NotificationBell } from './NotificationBell'
+import { DemoPill } from '@/components/demo/DemoBanner'
 import { useSwitchWorkspace } from './useSwitchWorkspace'
 import { useRecentWorkspaces } from './useRecentWorkspaces'
 import { orderByRecent, previousWorkspace } from '@/lib/recent-workspaces'
@@ -17,6 +18,7 @@ interface Props {
   workspaces: WorkspaceOption[]
   currentId: string
   notifications: NotificationItem[]
+  inDemo?: boolean
 }
 
 function Tile({ w, size }: { w: WorkspaceOption; size: number }) {
@@ -31,7 +33,7 @@ function Tile({ w, size }: { w: WorkspaceOption; size: number }) {
 }
 
 /** Phone-only header: the current workspace (tap for a bottom sheet to switch) on the left; its settings and notifications on the right. */
-export function MobileTopBar({ workspaces, currentId, notifications }: Props) {
+export function MobileTopBar({ workspaces, currentId, notifications, inDemo = false }: Props) {
   const [open, setOpen] = useState(false)
   const { pending, switchTo } = useSwitchWorkspace(() => setOpen(false))
   const current = workspaces.find(w => w.id === currentId) ?? workspaces[0]
@@ -73,6 +75,7 @@ export function MobileTopBar({ workspaces, currentId, notifications }: Props) {
         )}
 
         <div className="ml-auto flex shrink-0 items-center gap-1">
+          {inDemo && <DemoPill />}
           {current && (
             <Link href="/settings" aria-label="Settings" title="Settings"
               className="flex h-10 w-10 items-center justify-center rounded-full text-gray-600 hover:bg-brand-100">

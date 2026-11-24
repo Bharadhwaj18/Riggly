@@ -1,5 +1,4 @@
 import { redirect } from 'next/navigation'
-import { DemoBanner } from '@/components/demo/DemoBanner'
 import { TourProvider } from '@/components/tour/TourProvider'
 import { isDemoWorkspace } from '@/lib/demo'
 import { cookies, headers } from 'next/headers'
@@ -76,6 +75,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 
   const ctx = await getWorkspaceContext()
   const hiddenSections = ctx ? navHiddenSections(ctx.current) : []
+  const inDemo = !!ctx && isDemoWorkspace(ctx.current.workspace)
 
   // Opening the app on Today? Carry on in the section they were last in. Only the first page of a visit, so
   // choosing Today by hand later stays on Today.
@@ -89,6 +89,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   return (
     <PlayerProvider>
     <PayablesProvider payables={payables}>
+    <TourProvider userId={effectiveUser.id} inDemo={inDemo} hiddenSections={hiddenSections}>
     {/* dvh, not vh: on iPhone Safari 100vh is taller than what is visible, so focusing a field scrolled the whole page. */}
     <div className="flex h-dvh">
       <RememberLastPage />
@@ -96,14 +97,15 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       <IdentifyUser userId={effectiveUser.id} email={effectiveUser.email} name={profile?.display_name} />
       <Sidebar user={effectiveUser} pendingPaymentCount={pendingCount} notifications={notificationItems}
         workspaces={workspaceOptions}
-        currentWorkspaceId={currentWorkspaceId} hiddenSections={hiddenSections} />
+        currentWorkspaceId={currentWorkspaceId} hiddenSections={hiddenSections} inDemo={inDemo} />
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-5xl px-4 pb-28 pt-16 sm:px-6 lg:px-8 lg:pb-8 lg:pt-8">
-          <TourProvider userId={effectiveUser.id} inDemo={!!ctx && isDemoWorkspace(ctx.current.workspace)} hiddenSections={hiddenSections}><FinanceSettingsProvider settings={financeSettings} canApprove={!!ctx && isFinanceApprover(ctx.current)} workspaceId={currentWorkspaceId}>{ctx && isDemoWorkspace(ctx.current.workspace) && <DemoBanner />}<PageFade>{children}</PageFade><PlayerSpacer />{ctx && <QuickAddMenu allowed={{ shows: ctx.current.sections.shows === 'edit', setlists: ctx.current.sections.setlists === 'edit', finance: ctx.current.sections.finance === 'edit', calendar: ctx.current.sections.calendar === 'edit', tasks: ctx.current.sections.tasks === 'edit' }} />}{ctx?.current.sections.finance === 'edit' && <OfflineEntrySync />}</FinanceSettingsProvider></TourProvider>
+          <FinanceSettingsProvider settings={financeSettings} canApprove={!!ctx && isFinanceApprover(ctx.current)} workspaceId={currentWorkspaceId}><PageFade>{children}</PageFade><PlayerSpacer />{ctx && <QuickAddMenu allowed={{ shows: ctx.current.sections.shows === 'edit', setlists: ctx.current.sections.setlists === 'edit', finance: ctx.current.sections.finance === 'edit', calendar: ctx.current.sections.calendar === 'edit', tasks: ctx.current.sections.tasks === 'edit' }} />}{ctx?.current.sections.finance === 'edit' && <OfflineEntrySync />}</FinanceSettingsProvider>
         </div>
       </main>
       <TooltipLayer />
     </div>
+    </TourProvider>
     </PayablesProvider>
     </PlayerProvider>
   )

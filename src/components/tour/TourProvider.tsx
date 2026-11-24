@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { ArrowLeft, ArrowRight, Hand, X } from 'lucide-react'
 import { useToast } from '@/components/ui/Toaster'
 import { cn } from '@/lib/utils'
-import { buildWalkthrough, pathMatches, tourForPath, toursFor, WALKTHROUGH_ID, type Tour } from '@/lib/tours'
+import { buildWalkthrough, pathMatches, toursFor, WALKTHROUGH_ID, type Tour } from '@/lib/tours'
 import { placeTourCard } from '@/lib/tour-placement'
 import type { SectionKey } from '@/lib/workspace-sections'
 
@@ -48,7 +48,7 @@ const PAD = 6
 
 /**
  * Runs guided tours over the real app: dims the screen, spotlights the thing a step is about, and explains it.
- * In a demo band, a section's tour is offered the first time it's opened.
+ * In a demo band, the walkthrough is offered once, on Today. A page's own tour is in the Demo menu, not a popup.
  */
 export function TourProvider({ userId, inDemo, hiddenSections, children }: {
   userId: string
@@ -168,14 +168,13 @@ export function TourProvider({ userId, inDemo, hiddenSections, children }: {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setOffer(null)
     if (!inDemo || active) return
-    // Today offers the full walkthrough; other pages offer their own tour.
-    const found = pathname === '/' ? walkthrough : tourForPath(pathname)
-    const t = found && (found.id === WALKTHROUGH_ID ? found : sectionTours.find(x => x.id === found.id))
-    if (!t || state.done.includes(t.id) || state.dismissed.includes(t.id)) return
-    if (t.section && hiddenSections.includes(t.section)) return
+    // Only Today offers anything: the full walkthrough, once.
+    if (pathname !== '/') return
+    const t = walkthrough
+    if (state.done.includes(t.id) || state.dismissed.includes(t.id)) return
     const timer = window.setTimeout(() => setOffer(t), 700)
     return () => window.clearTimeout(timer)
-  }, [pathname, inDemo, active, state, hiddenSections, walkthrough, sectionTours])
+  }, [pathname, inDemo, active, state, walkthrough])
 
   const hole = rect && phase === 'found'
     ? { top: rect.top - PAD, left: rect.left - PAD, width: rect.width + PAD * 2, height: rect.height + PAD * 2 }
@@ -189,7 +188,7 @@ export function TourProvider({ userId, inDemo, hiddenSections, children }: {
         <div role="dialog" aria-label={`${offer.title} tour`} className="animate-fade-up fixed bottom-24 left-4 right-4 z-[60] rounded-2xl border border-brand-300 bg-white p-4 shadow-xl sm:right-auto sm:w-80 lg:bottom-6">
           <p className="text-xs font-bold uppercase tracking-[0.1em] text-brand-600">New here?</p>
           <p className="mt-1 text-sm font-bold text-gray-900">{offer.id === WALKTHROUGH_ID ? 'Take a walk through Rigly' : `Take the 30-second ${offer.title} tour`}</p>
-          <p className="mt-0.5 text-xs text-gray-500">{offer.blurb}</p>
+          <p className="mt-0.5 text-xs text-gray-500">{offer.blurb} It’s under Demo at the top whenever you want it.</p>
           <div className="mt-3 flex items-center gap-2">
             <button type="button" onClick={() => start(offer.id)} className="rounded-lg bg-brand-400 px-3.5 py-2 text-sm font-bold text-white hover:bg-brand-500">Show me</button>
             <button type="button" onClick={() => { save({ ...state, dismissed: [...new Set([...state.dismissed, offer.id])] }); setOffer(null) }} className="rounded-lg px-3 py-2 text-sm font-semibold text-gray-500 hover:bg-brand-50">Not now</button>

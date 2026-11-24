@@ -15,6 +15,7 @@ import type { WorkspaceOption } from '@/lib/workspace-options'
 import { ThemeIconButton } from '@/components/ui/ThemeToggle'
 import { MobileTabBar } from './MobileTabBar'
 import { MobileTopBar } from './MobileTopBar'
+import { DemoPill } from '@/components/demo/DemoBanner'
 import type { NotificationItem } from '@/types/notifications'
 import { sectionForHref, type SectionKey } from '@/lib/workspace-sections'
 
@@ -29,6 +30,8 @@ interface SidebarProps {
   currentWorkspaceId?: string
   /** Sections this member can't open; their links are hidden. */
   hiddenSections?: SectionKey[]
+  /** In a demo band: a small Demo pill with the tours and reset. */
+  inDemo?: boolean
 }
 
 const navGroups = [
@@ -54,7 +57,7 @@ const navGroups = [
   },
 ]
 
-export function Sidebar({ user, pendingPaymentCount = 0, notifications = [], workspaces = [], currentWorkspaceId = '', hiddenSections = [] }: SidebarProps) {
+export function Sidebar({ user, pendingPaymentCount = 0, notifications = [], workspaces = [], currentWorkspaceId = '', hiddenSections = [], inDemo = false }: SidebarProps) {
   const visibleGroups = navGroups.map(g => ({ ...g, items: g.items.filter(i => { const sec = sectionForHref(i.href); return !sec || !hiddenSections.includes(sec) }) })).filter(g => g.items.length > 0)
   const pathname = usePathname()
   const router = useRouter()
@@ -160,6 +163,7 @@ export function Sidebar({ user, pendingPaymentCount = 0, notifications = [], wor
           <NotificationBell notifications={notifications} />
         </div>
         {switcher}
+        {inDemo && <div className="px-3 pt-2"><DemoPill align="left" tone="sidebar" /></div>}
         <div className="no-scrollbar flex flex-1 flex-col overflow-y-auto px-3">
           {nav}
         </div>
@@ -167,7 +171,7 @@ export function Sidebar({ user, pendingPaymentCount = 0, notifications = [], wor
       </aside>
 
       {/* Phone: workspace + notifications on top, tabs at the bottom (everything else lives under "More") */}
-      <MobileTopBar workspaces={workspaces} currentId={currentWorkspaceId} notifications={notifications} />
+      <MobileTopBar workspaces={workspaces} currentId={currentWorkspaceId} notifications={notifications} inDemo={inDemo} />
       <MobileTabBar pendingPaymentCount={pendingPaymentCount} hiddenSections={hiddenSections} />
     </>
   )
