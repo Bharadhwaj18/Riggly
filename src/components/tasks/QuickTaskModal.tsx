@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import Link from 'next/link'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -22,8 +21,12 @@ interface Props {
 
 const selectClass = 'mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-400'
 
-export function QuickTaskModal({ boards, members, open, onOpenChange, dueDate }: Props) {
-  const [boardId, setBoardId] = useState(boards[0]?.id ?? '')
+/** General, the list for tasks with no other list, is picked by leaving the list empty (the server finds or makes it). */
+const isGeneralName = (name: string) => name.trim().toLowerCase() === 'general'
+
+export function QuickTaskModal({ boards: allBoards, members, open, onOpenChange, dueDate }: Props) {
+  const boards = allBoards.filter(b => !isGeneralName(b.name))
+  const [boardId, setBoardId] = useState('')
   const [title, setTitle] = useState('')
   const [due, setDue] = useState(dueDate ?? '')
   // The person adding it is doing it, unless they pick someone else.
@@ -38,7 +41,7 @@ export function QuickTaskModal({ boards, members, open, onOpenChange, dueDate }:
   if (open !== prevOpen) {
     setPrevOpen(open)
     if (open) {
-      setBoardId(prev => (boards.some(b => b.id === prev) ? prev : boards[0]?.id ?? ''))
+      setBoardId(prev => (boards.some(b => b.id === prev) ? prev : ''))
       setTitle('')
       setDue(dueDate ?? '')
       setAssigneeIds(me ? [me] : [])
@@ -48,10 +51,10 @@ export function QuickTaskModal({ boards, members, open, onOpenChange, dueDate }:
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!title.trim() || !boardId) return
+    if (!title.trim()) return
     setError(null)
     startTransition(async () => {
-      const result = await createTask({ boardId, title, dueDate: due || null, assigneeIds })
+      const result = await createTask({ boardId: boardId || null, title, dueDate: due || null, assigneeIds })
       if (result.error) {
         setError(result.error)
         toast(result.error, 'error')
@@ -64,14 +67,7 @@ export function QuickTaskModal({ boards, members, open, onOpenChange, dueDate }:
 
   return (
     <Modal open={open} onOpenChange={onOpenChange} title="New task" className="max-w-md">
-      {boards.length === 0 ? (
-        <div className="space-y-4">
-          <p className="text-sm text-gray-600">Tasks live in lists, like a show or Merch. Make a list first, then add tasks to it.</p>
-          <div className="flex justify-end">
-            <Button asChild><Link href="/tasks">Go to Tasks</Link></Button>
-          </div>
-        </div>
-      ) : (
+      {(
         <form onSubmit={submit} className="space-y-4">
           <div>
             <Label htmlFor="qt-title">Task</Label>
@@ -81,6 +77,7 @@ export function QuickTaskModal({ boards, members, open, onOpenChange, dueDate }:
             <div>
               <Label htmlFor="qt-board">List</Label>
               <Select id="qt-board" className={selectClass} value={boardId} onChange={e => setBoardId(e.target.value)}>
+                <option value="">General</option>
                 {boards.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
               </Select>
             </div>

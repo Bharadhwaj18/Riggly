@@ -2,12 +2,12 @@
 
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronDown, ChevronRight, ListChecks, NotebookPen, Plus, Search, Settings2, Star, X } from 'lucide-react'
+import { ArrowRightLeft, ChevronDown, ChevronRight, ListChecks, NotebookPen, Plus, Search, Star, X } from 'lucide-react'
 import { patchTask, type TaskPatch } from '@/actions/tasks'
 import { useToast } from '@/components/ui/Toaster'
 import { cn } from '@/lib/utils'
 import { addDaysISO, addMonthsISO } from '@/lib/dates'
-import { sectionsByWhen, type TaskSection } from '@/lib/task-view'
+import { openCountByList, orderLists, sectionsByWhen, type TaskSection } from '@/lib/task-view'
 import type { Member, Task, TaskBoard, TaskBucket, TaskField } from '@/types/tasks'
 import { AddColumnDialog } from './AddColumnDialog'
 import { RepeatBadge } from '../RepeatBadge'
@@ -15,6 +15,8 @@ import { TaskSheet } from './TaskSheet'
 import { DoneToggle, Faces, isStarred, recentTick, shortDate, type CellContext } from './cells'
 import { QuickAddBar } from './QuickAddBar'
 import { ListsManager } from './ListsManager'
+import { ListButton, ListRail } from './ListPicker'
+import { CellMenu } from './CellMenu'
 
 interface Props {
   boards: TaskBoard[]
@@ -73,15 +75,13 @@ function nextDue(due: string, recurrence: string) {
 /** How long a ticked task stays where it was (struck through) before it folds into Done. */
 const SETTLE_MS = 2500
 
-const chip = 'inline-flex min-h-9 shrink-0 items-center gap-1 rounded-full px-3.5 text-sm font-bold transition-colors'
-const chipOn = 'bg-gray-900 text-white dark:bg-white dark:text-gray-900'
-const chipOff = 'border border-brand-200 bg-white text-gray-700 hover:bg-brand-50'
 
 /**
  * Tasks: one list. Yours or everyone's, all lists or one, by when they're due. Tap a task to see the rest.
  */
 export function TasksView(props: Props) {
-  const { boards, buckets, fields, members, nameById, avatars, today, currentUserId, readOnly } = props
+  const { buckets, fields, members, nameById, avatars, today, currentUserId, readOnly } = props
+  const boards = useMemo(() => orderLists(props.boards), [props.boards])
   const router = useRouter()
   const toast = useToast()
   const [, startTransition] = useTransition()
@@ -116,6 +116,7 @@ export function TasksView(props: Props) {
         setPatches(prev => ({ ...prev, [task.id]: (prev[task.id] ?? []).filter(p => p !== patch) }))
         return
       }
+      if (patch.boardId && patch.boardId !== task.board_id) toast(`Moved to ${boards.find(b => b.id === patch.boardId)?.name ?? 'another list'}`, 'success')
       if (completing && task.recurrence && task.due_date) toast(`Done. The next one is due ${shortDate(nextDue(task.due_date, task.recurrence))}.`, 'success')
       router.refresh()
     })
@@ -169,73 +170,93 @@ export function TasksView(props: Props) {
   const open = shown.filter(t => t.progress !== 'completed')
   const overdue = open.filter(t => t.due_date && t.due_date < today).length
   const listName = useMemo(() => Object.fromEntries(boards.map(b => [b.id, b.name])) as Record<string, string>, [boards])
+  // Open tasks per list, for whoever's tasks are showing.
+  const counts = useMemo(
+    () => openCountByList(tasks.filter(t => boardIds.has(t.board_id)), t => everyone || (!!currentUserId && t.assignee_ids.includes(currentUserId))),
+    [tasks, boardIds, everyone, currentUserId],
+  )
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const current = boards.find(b => b.id === listId)
+  const picker = { boards, counts, value: listId, onChange: setListId, onManage: readOnly ? null : () => setListsOpen(true) }
 
   return (
-    <div className="max-w-2xl">
-      {props.scopeToggle && <div className="mb-3 flex justify-end">{props.scopeToggle}</div>}
-      <div className="mb-4">
-        <h1 className="font-display text-3xl font-bold text-gray-900">Tasks</h1>
-        <p className="mt-0.5 text-sm text-gray-500">
-          {open.length} {everyone ? 'open' : 'for you'}{overdue > 0 && <> · <span className="font-bold text-red-600">{overdue} overdue</span></>}
-        </p>
-      </div>
-
-      {boards.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-brand-200 px-6 py-14 text-center">
-          <p className="font-bold text-gray-800">Make your first list</p>
-          <p className="max-w-sm text-sm text-gray-500">Lists keep related tasks together, like a show, “Gig prep” or “Merch”.</p>
-          {!readOnly && <button type="button" onClick={() => setListsOpen(true)} className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-brand-400 px-4 text-sm font-extrabold text-white hover:bg-brand-500"><Plus className="h-4 w-4" />New list</button>}
-        </div>
-      ) : (
-        <>
-          {!readOnly && <QuickAddBar key={listId ?? 'any'} boards={boards} members={members} currentUserId={currentUserId} today={today} listId={listId} mineOnly={!everyone} />}
-
-          {/* Whose tasks, and which list. */}
-          <div data-tour="task-filters" className="no-scrollbar -mx-4 mb-5 flex items-center gap-2 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-            {currentUserId && (
-              <>
-                <button type="button" aria-pressed={!everyone} onClick={() => setEveryone(false)} className={cn(chip, !everyone ? chipOn : chipOff)}>Mine</button>
-                <button type="button" aria-pressed={everyone} onClick={() => setEveryone(true)} className={cn(chip, everyone ? chipOn : chipOff)}>Everyone</button>
-                {boards.length > 1 && <span className="mx-0.5 h-6 w-px shrink-0 bg-brand-200" aria-hidden />}
-              </>
-            )}
-            {boards.length > 1 && boards.map(b => (
-              <button key={b.id} type="button" aria-pressed={listId === b.id} onClick={() => setListId(listId === b.id ? null : b.id)}
-                className={cn(chip, listId === b.id ? 'bg-brand-400 text-white' : chipOff)}>
-                {b.name}{listId === b.id && <X className="h-3.5 w-3.5" />}
-              </button>
-            ))}
-            <button type="button" onClick={() => setListsOpen(true)} aria-label="Your lists" title="Your lists" className={cn(chip, chipOff, 'px-2.5')}><Settings2 className="h-4 w-4" /></button>
-            <button type="button" onClick={() => { setSearching(s => !s); if (searching) setQuery('') }} aria-label="Search tasks" aria-pressed={searching} className={cn(chip, searching ? chipOn : chipOff, 'px-2.5')}><Search className="h-4 w-4" /></button>
-          </div>
-          {searching && (
-            <input type="search" autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Search tasks" aria-label="Search tasks"
-              className="-mt-2 mb-5 min-h-10 w-full rounded-xl border border-brand-200 bg-white px-3 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-400" />
-          )}
-
-          <div className="space-y-5">
-            {sections.map(s => (
-              <section key={s.key}>
-                <SectionHeader s={s} collapsed={isCollapsed(s)} onToggle={() => setCollapsed(prev => ({ ...prev, [s.key]: !isCollapsed(s) }))} danger={s.key === 'overdue'} />
-                {!isCollapsed(s) && (
-                  <div className="overflow-hidden rounded-2xl border border-brand-200 bg-white">
-                    {s.tasks.map(t => (
-                      <TaskRow key={t.id} task={t} c={c} listName={listId ? null : listName[t.board_id]} showFaces={everyone} onOpen={() => setOpenId(t.id)} />
-                    ))}
-                  </div>
-                )}
-              </section>
-            ))}
-            {shown.length === 0 && (
-              <p className="rounded-2xl border-2 border-dashed border-brand-200 px-4 py-10 text-center text-sm text-gray-500">
-                {query ? 'No tasks match that search.'
-                  : everyone ? 'No tasks here yet. Add one above.'
-                    : <>Nothing on your plate. Add a task above, or <button type="button" onClick={() => setEveryone(true)} className="font-bold text-brand-700 hover:underline">see everyone’s</button>.</>}
-              </p>
-            )}
-          </div>
-        </>
+    <div className="lg:grid lg:max-w-5xl lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-10">
+      {/* Laptop: the lists down the left. */}
+      {boards.length > 0 && (
+        <aside className="hidden lg:block">
+          <div className="sticky top-8 pt-1"><ListRail {...picker} /></div>
+        </aside>
       )}
+
+      <div className="min-w-0 max-w-2xl">
+        {props.scopeToggle && <div className="mb-3 flex justify-end">{props.scopeToggle}</div>}
+        <div className="mb-4">
+          <h1 className="font-display text-3xl font-bold text-gray-900">{current ? current.name : 'Tasks'}</h1>
+          <p className="mt-0.5 text-sm text-gray-500">
+            {open.length} {everyone ? 'open' : 'for you'}{overdue > 0 && <> · <span className="font-bold text-red-600">{overdue} overdue</span></>}
+            {current?.is_general && ' · tasks that aren’t in a list'}
+          </p>
+        </div>
+
+        {boards.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-brand-200 px-6 py-14 text-center">
+            <p className="font-bold text-gray-800">Make your first list</p>
+            <p className="max-w-sm text-sm text-gray-500">Lists keep related tasks together, like a show, “Gig prep” or “Merch”.</p>
+            {!readOnly && <button type="button" onClick={() => setListsOpen(true)} className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-brand-400 px-4 text-sm font-extrabold text-white hover:bg-brand-500"><Plus className="h-4 w-4" />New list</button>}
+          </div>
+        ) : (
+          <>
+            {/* Whose tasks, and (on a phone) which list. */}
+            <div data-tour="task-filters" className="mb-4 flex items-center gap-2">
+              {currentUserId && (
+                <div role="group" aria-label="Whose tasks" className="inline-flex shrink-0 rounded-full bg-brand-100 p-0.5">
+                  {([['Mine', false], ['Everyone', true]] as const).map(([label, on]) => (
+                    <button key={label} type="button" aria-pressed={everyone === on} onClick={() => setEveryone(on)}
+                      className={cn('min-h-8 rounded-full px-4 text-sm font-bold transition-colors',
+                        everyone === on ? 'bg-white text-gray-900 shadow-sm ring-1 ring-brand-200' : 'text-gray-500 hover:text-gray-800')}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="min-w-0 lg:hidden"><ListButton {...picker} open={pickerOpen} onOpenChange={setPickerOpen} /></div>
+              <button type="button" onClick={() => { setSearching(s => !s); if (searching) setQuery('') }} aria-label={searching ? 'Close search' : 'Search tasks'} aria-pressed={searching}
+                className={cn('ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full', searching ? 'bg-brand-100 text-gray-900' : 'text-gray-500 hover:bg-brand-50')}>
+                {searching ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
+              </button>
+            </div>
+            {searching && (
+              <input type="search" autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Search tasks and notes" aria-label="Search tasks"
+                className="mb-4 min-h-10 w-full rounded-xl border border-brand-200 bg-white px-3 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-400" />
+            )}
+
+            {!readOnly && <QuickAddBar key={listId ?? 'any'} boards={boards} members={members} currentUserId={currentUserId} today={today} listId={listId} mineOnly={!everyone} />}
+
+            <div className="space-y-5">
+              {sections.map(s => (
+                <section key={s.key}>
+                  <SectionHeader s={s} collapsed={isCollapsed(s)} onToggle={() => setCollapsed(prev => ({ ...prev, [s.key]: !isCollapsed(s) }))} danger={s.key === 'overdue'} />
+                  {!isCollapsed(s) && (
+                    <div className="overflow-hidden rounded-2xl border border-brand-200 bg-white">
+                      {s.tasks.map(t => (
+                        <TaskRow key={t.id} task={t} c={c} listName={listId ? null : listName[t.board_id]} showFaces={everyone} onOpen={() => setOpenId(t.id)} />
+                      ))}
+                    </div>
+                  )}
+                </section>
+              ))}
+              {shown.length === 0 && (
+                <p className="rounded-2xl border-2 border-dashed border-brand-200 px-4 py-10 text-center text-sm text-gray-500">
+                  {query ? 'No tasks match that search.'
+                    : current ? <>Nothing open in {current.name}. <button type="button" onClick={() => setListId(null)} className="font-bold text-brand-700 hover:underline">See all lists</button></>
+                      : everyone ? 'No tasks yet. Add one above.'
+                        : <>Nothing on your plate. Add a task above, or <button type="button" onClick={() => setEveryone(true)} className="font-bold text-brand-700 hover:underline">see everyone’s</button>.</>}
+                </p>
+              )}
+            </div>
+          </>
+        )}
+      </div>
 
       <TaskSheet task={openTask} c={c} fields={fields} onClose={() => setOpenId(null)} onEditField={field => setFieldDialog({ field })} />
       {fieldDialog && <AddColumnDialog key={fieldDialog.field?.id ?? 'new'} open onOpenChange={o => { if (!o) setFieldDialog(null) }} field={fieldDialog.field} />}
@@ -266,7 +287,7 @@ function TaskRow({ task: t, c, listName, showFaces, onOpen }: { task: Task; c: C
     listName,
   ].filter(Boolean).join(' · ')
   return (
-    <div data-task-row className="animate-row-in flex min-h-[60px] items-center gap-1 border-b border-brand-100 py-1.5 pl-1.5 pr-3 last:border-b-0">
+    <div data-task-row className="group animate-row-in flex min-h-[60px] items-center gap-1 border-b border-brand-100 py-1.5 pl-1.5 pr-3 last:border-b-0">
       <DoneToggle task={t} c={c} size={22} />
       <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg py-1 text-left">
         <span className="min-w-0 flex-1">
@@ -283,6 +304,13 @@ function TaskRow({ task: t, c, listName, showFaces, onOpen }: { task: Task; c: C
         {starred && <Star className="h-4 w-4 shrink-0 fill-current text-amber-500" aria-label="Important" />}
         {showFaces && t.assignee_ids.length > 0 && <Faces ids={t.assignee_ids} c={c} size={26} />}
       </button>
+      {!c.readOnly && c.boards.length > 1 && (
+        <CellMenu label={`Move “${t.title}” to another list`} value={t.board_id}
+          className="hidden shrink-0 gap-1 rounded-full border border-brand-200 bg-white px-2.5 text-xs font-bold text-gray-600 lg:inline-flex lg:opacity-0 lg:focus-visible:opacity-100 lg:group-hover:opacity-100 lg:aria-expanded:opacity-100"
+          trigger={<span className="inline-flex items-center gap-1"><ArrowRightLeft className="h-3.5 w-3.5" />Move</span>}
+          options={c.boards.map(b => ({ value: b.id, label: b.name }))}
+          onChange={v => { if (v !== t.board_id) c.onPatch(t, { boardId: v }) }} />
+      )}
     </div>
   )
 }

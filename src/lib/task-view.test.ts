@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { DEFAULT_VIEW, activeFilterCount, filterTasks, groupTasks, sectionsByWhen, sortTasks } from './task-view'
+import { DEFAULT_VIEW, activeFilterCount, filterTasks, groupTasks, openCountByList, orderLists, sectionsByWhen, sortTasks } from './task-view'
 import type { Task, TaskBoard } from '@/types/tasks'
 
 const task = (o: Partial<Task>): Task => ({
@@ -74,5 +74,24 @@ describe('sectionsByWhen', () => {
   })
   it('leaves out empty sections', () => {
     expect(sectionsByWhen([t('now', today)], today, '2026-06-17', '2026-05-27').map(x => x.key)).toEqual(['today'])
+  })
+})
+
+describe('orderLists', () => {
+  it('puts General first and keeps the rest in order', () => {
+    const lists = [{ id: 'a' }, { id: 'g', is_general: true }, { id: 'b' }]
+    expect(orderLists(lists).map(l => l.id)).toEqual(['g', 'a', 'b'])
+  })
+})
+
+describe('openCountByList', () => {
+  it('counts open tasks per list for the people shown', () => {
+    const tasks = [
+      task({ id: '1', board_id: 'a', assignee_ids: ['me'] }),
+      task({ id: '2', board_id: 'a', assignee_ids: ['you'] }),
+      task({ id: '3', board_id: 'b', assignee_ids: ['me'], progress: 'completed' }),
+    ]
+    expect(openCountByList(tasks, () => true)).toEqual({ a: 2 })
+    expect(openCountByList(tasks, t => t.assignee_ids.includes('me'))).toEqual({ a: 1 })
   })
 })

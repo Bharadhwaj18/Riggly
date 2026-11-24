@@ -67,6 +67,18 @@ export function sortTasks(tasks: Task[], sort: TaskViewState['sort']) {
 
 export interface TaskSection { key: string; label: string; tasks: Task[]; collapsedByDefault?: boolean }
 
+/** Lists in the order people see them: General first, then the rest as they were made. */
+export function orderLists<T extends { is_general?: boolean }>(boards: T[]): T[] {
+  return [...boards.filter(b => b.is_general), ...boards.filter(b => !b.is_general)]
+}
+
+/** Open tasks per list, counting only the ones `include` lets through (yours, or everyone's). */
+export function openCountByList(tasks: Task[], include: (t: Task) => boolean): Record<string, number> {
+  const counts: Record<string, number> = {}
+  for (const t of tasks) if (t.progress !== 'completed' && include(t)) counts[t.board_id] = (counts[t.board_id] ?? 0) + 1
+  return counts
+}
+
 export function groupTasks(tasks: Task[], v: TaskViewState, ctx: { boards: TaskBoard[]; nameById: Record<string, string> }): TaskSection[] {
   const sorted = sortTasks(tasks, v.sort)
   if (v.groupBy === 'none') return [{ key: 'all', label: 'All tasks', tasks: sorted }]

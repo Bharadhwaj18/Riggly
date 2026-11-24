@@ -52,6 +52,38 @@ async function nextPosition(supabase: Supabase, bucketId: string) {
 
 // ---- Boards -------------------------------------------------------------------------
 
+/**
+ * The workspace's General list (where a task with no list picked goes), made the first time it's needed.
+ * Null if it can't be found or made (the General list SQL hasn't run, or you can only view Tasks).
+ */
+async function generalBoardId(supabase: Supabase, userId: string): Promise<string | null> {
+  const ws = await requireWorkspaceId()
+  const { data: found, error } = await supabase.from('task_boards').select('id').eq('workspace_id', ws).eq('is_general', true).is('archived_at', null).limit(1)
+  if (error) return null
+  if (found?.[0]) return found[0].id
+  const { data: board, error: insertError } = await supabase.from('task_boards')
+    .insert({ name: 'General', created_by: userId, workspace_id: ws, is_general: true }).select('id').single()
+  if (insertError || !board) {
+    // Someone else made it a moment ago.
+    const { data: again } = await supabase.from('task_boards').select('id').eq('workspace_id', ws).eq('is_general', true).limit(1)
+    return again?.[0]?.id ?? null
+  }
+  await supabase.from('task_buckets').insert(DEFAULT_BUCKETS.map((n, i) => ({ board_id: board.id, workspace_id: ws, name: n, position: i + 1 })))
+  return board.id
+}
+
+/** Make sure this workspace has its General list (called when Tasks opens). */
+export async function ensureGeneralList(): Promise<string | null> {
+  const { supabase, user } = await getActor()
+  if (!user) return null
+  return generalBoardId(supabase, user.id)
+}
+
+async function isGeneral(supabase: Supabase, boardId: string) {
+  const { data } = await supabase.from('task_boards').select('is_general').eq('id', boardId).maybeSingle()
+  return !!data?.is_general
+}
+
 export async function createBoard(name: string): Promise<Result & { id?: string }> {
   const parsed = boardNameSchema.safeParse(name)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
@@ -82,6 +114,7 @@ export async function renameBoard(id: string, name: string): Promise<Result> {
   if (!parsed.success) return { error: parsed.error.issues[0].message }
   const { supabase, user } = await getActor()
   if (!user) return { error: 'Not authenticated' }
+  if (await isGeneral(supabase, id)) return { error: 'General keeps its name, so tasks without a list always have a home.' }
   const { error } = await supabase.from('task_boards').update({ name: parsed.data }).eq('id', id)
   if (error) return { error: error.message }
   refresh()
@@ -91,6 +124,7 @@ export async function renameBoard(id: string, name: string): Promise<Result> {
 export async function deleteBoard(id: string): Promise<Result> {
   const { supabase, user } = await getActor()
   if (!user) return { error: 'Not authenticated' }
+  if (await isGeneral(supabase, id)) return { error: 'General can’t be deleted. It’s where tasks without a list go.' }
   const { error } = await supabase.from('task_boards').delete().eq('id', id)
   if (error) return { error: error.message }
   refresh()
@@ -225,9 +259,9 @@ export async function deleteLabel(boardId: string, id: string): Promise<Result> 
 
 // ---- Tasks --------------------------------------------------------------------------
 
-/** Quick-add: a title, plus optionally a bucket (defaults to the board's first), due date and assignees. */
+/** Quick-add: a title, plus optionally a list (General when none), bucket (the list's first), due date and assignees. */
 export async function createTask(input: {
-  boardId: string
+  boardId?: string | null
   bucketId?: string
   title: string
   dueDate?: string | null
@@ -239,9 +273,12 @@ export async function createTask(input: {
   const { supabase, user } = await getActor()
   if (!user) return { error: 'Not authenticated' }
 
+  const boardId = input.boardId || await generalBoardId(supabase, user.id)
+  if (!boardId) return { error: 'Pick a list for this task.' }
+
   let bucketId = input.bucketId
   if (!bucketId) {
-    const { data: first } = await supabase.from('task_buckets').select('id').eq('board_id', input.boardId).order('position').limit(1)
+    const { data: first } = await supabase.from('task_buckets').select('id').eq('board_id', boardId).order('position').limit(1)
     bucketId = first?.[0]?.id
     if (!bucketId) return { error: 'That list is missing its setup. Try another list.' }
   }
@@ -249,7 +286,7 @@ export async function createTask(input: {
   // Nobody named: the person adding it is doing it. Passing an empty list leaves it unassigned.
   const assigneeIds = [...new Set(input.assigneeIds ?? [user.id])]
   const { data: task, error } = await supabase.from('tasks').insert({
-    board_id: input.boardId,
+    board_id: boardId,
     bucket_id: bucketId,
     title,
     due_date: input.dueDate ?? null,

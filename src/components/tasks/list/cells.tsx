@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { CheckSquare2, Circle, CircleCheck, CircleDot, Square, UserPlus, X } from 'lucide-react'
+import { CheckSquare2, ChevronDown, Circle, CircleCheck, CircleDot, Square, UserPlus, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { STATUS_TEXT } from '@/lib/task-view'
 import { UserAvatar } from '@/components/ui/UserAvatar'
@@ -169,7 +169,8 @@ export function DateCell({ value, label, overdue, onChange, readOnly, compact }:
 export function GroupCell({ task, c }: { task: Task; c: CellContext }) {
   const board = c.boards.find(b => b.id === task.board_id)
   return (
-    <CellMenu label="List" disabled={c.readOnly} trigger={<span className="truncate px-1 text-sm font-bold text-gray-800">{board?.name ?? 'List'}</span>} value={task.board_id}
+    <CellMenu label="Move to another list" disabled={c.readOnly} value={task.board_id}
+      trigger={<span className="inline-flex min-w-0 items-center gap-1 px-1 text-sm font-bold text-gray-800"><span className="truncate">{board?.name ?? 'List'}</span>{!c.readOnly && <ChevronDown className="h-4 w-4 shrink-0 text-gray-400" />}</span>}
       options={c.boards.map(b => ({ value: b.id, label: b.name }))}
       onChange={v => c.onPatch(task, { boardId: v })} />
   )

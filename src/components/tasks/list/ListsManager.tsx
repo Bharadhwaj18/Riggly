@@ -37,7 +37,7 @@ export function ListsManager({ open, onOpenChange, boards, tasks, readOnly }: { 
   }
 
   return (
-    <Modal open={open} onOpenChange={onOpenChange} title="Your lists" description="Lists keep related tasks together, like a show or Merch."
+    <Modal open={open} onOpenChange={onOpenChange} title="Edit lists" description="Lists keep related tasks together, like a show or Merch. Tap a name to rename it."
       className="max-w-md max-sm:top-auto max-sm:bottom-0 max-sm:max-w-none max-sm:translate-y-0 max-sm:rounded-b-none max-sm:rounded-t-3xl">
       <ul className="divide-y divide-brand-100 rounded-xl border border-brand-200">
         {boards.map(b => {
@@ -45,10 +45,14 @@ export function ListsManager({ open, onOpenChange, boards, tasks, readOnly }: { 
           return (
             <li key={b.id} className="flex min-h-12 items-center gap-2 pl-2 pr-1">
               <div className="min-w-0 flex-1">
-                <InlineText value={b.name} label="List name" readOnly={readOnly} onSave={v => v && run(() => renameBoard(b.id, v))} className="text-sm font-bold text-gray-900" />
+                {b.is_general ? (
+                  <p className="px-1 py-1.5"><span className="block text-sm font-bold text-gray-900">{b.name}</span><span className="block text-xs text-gray-500">Tasks with no list go here. It can’t be renamed or deleted.</span></p>
+                ) : (
+                  <InlineText value={b.name} label="List name" readOnly={readOnly} onSave={v => v && run(() => renameBoard(b.id, v))} className="text-sm font-bold text-gray-900" />
+                )}
               </div>
               <span className="shrink-0 text-xs text-gray-500">{count} open</span>
-              {!readOnly && (
+              {!readOnly && !b.is_general && (
                 <button type="button" onClick={() => remove(b)} disabled={pending} aria-label={`Delete ${b.name}`}
                   className="rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"><Trash2 className="h-4 w-4" /></button>
               )}

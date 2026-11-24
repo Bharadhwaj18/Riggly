@@ -125,8 +125,8 @@ export const TOURS: Tour[] = [
     blurb: 'Who’s doing what, by when.',
     startPath: '/tasks',
     steps: [
-      { path: '^/tasks$', target: ['[data-tour="task-add"]'], title: 'Add a task', brief: true, body: 'Type it, tap Today or a date and who’s doing it, and press Enter. They see it on their Today.' },
-      { path: '^/tasks$', target: ['[data-tour="task-filters"]'], title: 'Yours or everyone’s', body: 'Mine shows what’s yours, Everyone shows the whole band. Tap a list, like a show, to see just its tasks.' },
+      { path: '^/tasks$', target: ['[data-tour="task-add"]'], title: 'Add a task', brief: true, body: 'Type it, then pick when, who it’s for and which list. No list means it goes in General.' },
+      { path: '^/tasks$', target: ['[data-tour="task-filters"]'], title: 'Yours or everyone’s', body: 'Mine shows what’s yours, Everyone shows the whole band. Pick a list under All lists to see just its tasks.' },
       { path: '^/tasks$', title: 'Tick it off', body: 'Tap the circle when it’s done. Tap a task to add notes, a checklist, or star it as important.' },
     ],
   },

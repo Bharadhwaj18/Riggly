@@ -676,6 +676,8 @@ export type Database = {
           archived_at: string | null
           created_by: string
           created_at: string
+          /** The workspace's General list (tasks with no list picked). Missing until the General list SQL runs. */
+          is_general?: boolean
         }
         Insert: {
           workspace_id?: string
@@ -685,12 +687,14 @@ export type Database = {
           archived_at?: string | null
           created_by: string
           created_at?: string
+          is_general?: boolean
         }
         Update: {
           workspace_id?: string
           id?: string
           name?: string
           labels?: TaskBoardLabel[]
+          is_general?: boolean
           archived_at?: string | null
           created_by?: string
           created_at?: string

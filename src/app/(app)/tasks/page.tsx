@@ -8,6 +8,7 @@ import { getWorkspaceContext } from '@/lib/workspace'
 import { todayISO } from '@/lib/shows'
 import { buildPeople } from '@/lib/tasks'
 import { TasksView } from '@/components/tasks/list/TasksView'
+import { ensureGeneralList } from '@/actions/tasks'
 
 interface Props {
   searchParams: Promise<{ view?: string; group?: string; list?: string; who?: string; task?: string; mine?: string; scope?: string }>
@@ -32,6 +33,8 @@ export default async function TasksPage({ searchParams }: Props) {
       </div>
     )
   }
+  // Every workspace has a General list for tasks that don't fit anywhere else; make it if it's missing.
+  if (wsCtx?.current.sections.tasks === 'edit') await ensureGeneralList()
   const [data, profiles, avatars, { data: { user } }, ctx] = await Promise.all([
     getCachedTaskData(), getCachedAllProfiles(), getCachedProfileAvatars(), getCachedUser(), getWorkspaceContext(),
   ])
