@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { CheckSquare2, Plus, Square, Trash2, X } from 'lucide-react'
 import { deleteTask } from '@/actions/tasks'
@@ -18,6 +18,14 @@ export function TaskExtras({ task, c, stacked = false, hideDelete = false }: { t
   const [pending, startTransition] = useTransition()
   const checklist = task.checklist
   const done = checklist.filter(i => i.done).length
+
+  // Closing the sheet (Escape, swipe, the X) doesn't always blur the notes first, so save on the way out too.
+  const latest = useRef({ notes, task, c })
+  useEffect(() => { latest.current = { notes, task, c } })
+  useEffect(() => () => {
+    const { notes: n, task: t, c: ctx } = latest.current
+    if (!ctx.readOnly && n !== (t.description ?? '')) ctx.onPatch(t, { description: n })
+  }, [])
 
   const saveChecklist = (list: typeof checklist) => c.onPatch(task, { checklist: list })
 

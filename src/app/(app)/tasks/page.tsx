@@ -39,7 +39,6 @@ export default async function TasksPage({ searchParams }: Props) {
 
   return (
     <TasksView
-      key={`${who ?? ''}:${list ?? group ?? ''}`}
       boards={data.boards}
       buckets={data.buckets}
       tasks={data.tasks}

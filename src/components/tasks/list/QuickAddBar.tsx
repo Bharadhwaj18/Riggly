@@ -21,7 +21,11 @@ const chipOn = 'border-brand-400 bg-brand-100 text-brand-700'
  * Add a task with its date, who's doing it and its list in one go: type, tap the chips you need, press Enter.
  * It goes in the list you're looking at, otherwise the one you used last on this device.
  */
-export function QuickAddBar({ boards, members, currentUserId, today, listId }: { boards: TaskBoard[]; members: Member[]; currentUserId?: string; today: string; listId?: string | null }) {
+export function QuickAddBar({ boards, members, currentUserId, today, listId, mineOnly = false }: {
+  boards: TaskBoard[]; members: Member[]; currentUserId?: string; today: string; listId?: string | null
+  /** The list below shows only your tasks, so a task for someone else won't appear in it. */
+  mineOnly?: boolean
+}) {
   const router = useRouter()
   const toast = useToast()
   const [pending, start] = useTransition()
@@ -52,7 +56,10 @@ export function QuickAddBar({ boards, members, currentUserId, today, listId }: {
     start(async () => {
       const res = await createTask({ boardId: board.id, title, dueDate: due, assigneeIds: who })
       if (res.error) { toast(res.error, 'error'); return }
-      toast('Task added', 'success')
+      // Say where it went when it won't show in the list you're looking at.
+      const otherList = !!listId && board.id !== listId
+      const notMine = mineOnly && !(currentUserId && who.includes(currentUserId))
+      toast(otherList ? `Added to ${board.name}` : notMine ? 'Added. It’s not yours, so it’s under Everyone.' : 'Task added', 'success')
       setTitle('')
       setDue(null)
       router.refresh()
@@ -83,7 +90,7 @@ export function QuickAddBar({ boards, members, currentUserId, today, listId }: {
         </label>
         <CellMenu label="Who’s doing it" multiple value={who} className={cn(chip, who.length ? chipOn : chipOff)}
           trigger={<span className="inline-flex items-center gap-1.5"><UserRound className="h-3.5 w-3.5" />{whoLabel}</span>}
-          options={members.map(m => ({ value: m.id, label: m.id === currentUserId ? `${m.name} (you)` : m.name }))}
+          options={members.map(m => ({ value: m.id, label: m.name }))}
           onChange={id => setWho(w => (w.includes(id) ? w.filter(x => x !== id) : [...w, id]))} />
         {boards.length > 1 && board && (
           <CellMenu label="List" value={board.id} className={cn(chip, chipOff)}

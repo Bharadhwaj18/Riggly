@@ -66,7 +66,7 @@ export function QuickTaskModal({ boards, members, open, onOpenChange, dueDate }:
     <Modal open={open} onOpenChange={onOpenChange} title="New task" className="max-w-md">
       {boards.length === 0 ? (
         <div className="space-y-4">
-          <p className="text-sm text-gray-600">Tasks live on boards. Create a board first, then add tasks to it.</p>
+          <p className="text-sm text-gray-600">Tasks live in lists, like a show or Merch. Make a list first, then add tasks to it.</p>
           <div className="flex justify-end">
             <Button asChild><Link href="/tasks">Go to Tasks</Link></Button>
           </div>
@@ -74,12 +74,12 @@ export function QuickTaskModal({ boards, members, open, onOpenChange, dueDate }:
       ) : (
         <form onSubmit={submit} className="space-y-4">
           <div>
-            <Label htmlFor="qt-title">Title *</Label>
+            <Label htmlFor="qt-title">Task</Label>
             <Input id="qt-title" className="mt-1" placeholder="Book the rehearsal room" value={title} onChange={e => setTitle(e.target.value)} autoFocus />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label htmlFor="qt-board">Board</Label>
+              <Label htmlFor="qt-board">List</Label>
               <Select id="qt-board" className={selectClass} value={boardId} onChange={e => setBoardId(e.target.value)}>
                 {boards.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
               </Select>
@@ -90,7 +90,7 @@ export function QuickTaskModal({ boards, members, open, onOpenChange, dueDate }:
             </div>
           </div>
           <div>
-            <Label>Assign to</Label>
+            <Label>Who’s doing it</Label>
             <div className="mt-1.5"><AssigneePicker members={members} value={assigneeIds} onChange={setAssigneeIds} /></div>
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}

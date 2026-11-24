@@ -243,7 +243,7 @@ export async function createTask(input: {
   if (!bucketId) {
     const { data: first } = await supabase.from('task_buckets').select('id').eq('board_id', input.boardId).order('position').limit(1)
     bucketId = first?.[0]?.id
-    if (!bucketId) return { error: 'This board has no buckets' }
+    if (!bucketId) return { error: 'That list is missing its setup. Try another list.' }
   }
 
   // Nobody named: the person adding it is doing it. Passing an empty list leaves it unassigned.
@@ -298,6 +298,10 @@ async function onTaskCompleted(supabase: Supabase, actorId: string, taskId: stri
   if (!bucketId) return
 
   const dueDate = nextDueDate(task.due_date, task.recurrence as TaskRecurrence)
+  // Ticked, unticked and ticked again: the next one is already there, so don't make a second.
+  const { count: already } = await supabase.from('tasks').select('id', { count: 'exact', head: true })
+    .eq('board_id', task.board_id).eq('title', task.title).eq('due_date', dueDate).neq('id', task.id)
+  if ((already ?? 0) > 0) return
   const startDate = task.start_date ? addDaysISO(dueDate, -daysUntil(task.due_date, task.start_date)) : null
   await supabase.from('tasks').insert({
     board_id: task.board_id,
@@ -511,7 +515,7 @@ export async function patchTask(id: string, patch: TaskPatch): Promise<Result> {
   if (patch.boardId !== undefined && patch.boardId !== existing.board_id) {
     const { data: first } = await supabase.from('task_buckets').select('id').eq('board_id', patch.boardId).order('position').limit(1)
     const bucketId = first?.[0]?.id
-    if (!bucketId) return { error: 'That group has no buckets yet' }
+    if (!bucketId) return { error: 'That list is missing its setup. Try another list.' }
     update.board_id = patch.boardId
     update.bucket_id = bucketId
     update.label_ids = [] // labels belong to a group

@@ -1,12 +1,12 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronDown, ChevronRight, ListChecks, NotebookPen, Plus, Search, Settings2, Star, X } from 'lucide-react'
 import { patchTask, type TaskPatch } from '@/actions/tasks'
 import { useToast } from '@/components/ui/Toaster'
 import { cn } from '@/lib/utils'
-import { addDaysISO } from '@/lib/dates'
+import { addDaysISO, addMonthsISO } from '@/lib/dates'
 import { sectionsByWhen, type TaskSection } from '@/lib/task-view'
 import type { Member, Task, TaskBoard, TaskBucket, TaskField } from '@/types/tasks'
 import { AddColumnDialog } from './AddColumnDialog'
@@ -63,6 +63,16 @@ function applyPatch(t: Task, p: TaskPatch, buckets: TaskBucket[]): Task {
   return next
 }
 
+/** When a repeating task's next copy is due, once this one is ticked off. */
+function nextDue(due: string, recurrence: string) {
+  if (recurrence === 'daily') return addDaysISO(due, 1)
+  if (recurrence === 'weekly') return addDaysISO(due, 7)
+  return addMonthsISO(due, 1)
+}
+
+/** How long a ticked task stays where it was (struck through) before it folds into Done. */
+const SETTLE_MS = 2500
+
 const chip = 'inline-flex min-h-9 shrink-0 items-center gap-1 rounded-full px-3.5 text-sm font-bold transition-colors'
 const chipOn = 'bg-gray-900 text-white dark:bg-white dark:text-gray-900'
 const chipOff = 'border border-brand-200 bg-white text-gray-700 hover:bg-brand-50'
@@ -90,8 +100,15 @@ export function TasksView(props: Props) {
     [baseTasks, patches, buckets],
   )
 
+  // Tasks just ticked stay in place for a moment, so you see them go, then fold into Done.
+  const [settling, setSettling] = useState<Set<string>>(() => new Set())
+  const settle = (id: string, on: boolean) => setSettling(prev => { const next = new Set(prev); if (on) next.add(id); else next.delete(id); return next })
+
   const onPatch = (task: Task, patch: TaskPatch) => {
     setPatches(prev => ({ ...prev, [task.id]: [...(prev[task.id] ?? []), patch] }))
+    const completing = patch.progress === 'completed' && task.progress !== 'completed'
+    if (completing) { settle(task.id, true); window.setTimeout(() => settle(task.id, false), SETTLE_MS) }
+    if (patch.progress && patch.progress !== 'completed') settle(task.id, false)
     startTransition(async () => {
       const res = await patchTask(task.id, patch)
       if (res.error) {
@@ -99,6 +116,7 @@ export function TasksView(props: Props) {
         setPatches(prev => ({ ...prev, [task.id]: (prev[task.id] ?? []).filter(p => p !== patch) }))
         return
       }
+      if (completing && task.recurrence && task.due_date) toast(`Done. The next one is due ${shortDate(nextDue(task.due_date, task.recurrence))}.`, 'success')
       router.refresh()
     })
   }
@@ -111,9 +129,15 @@ export function TasksView(props: Props) {
       boardIds.has(t.board_id) &&
       (everyone || (!!currentUserId && t.assignee_ids.includes(currentUserId))) &&
       (!listId || t.board_id === listId) &&
-      (!q || t.title.toLowerCase().includes(q)))
+      (!q || t.title.toLowerCase().includes(q) || (t.description ?? '').toLowerCase().includes(q)))
   }, [tasks, boardIds, everyone, currentUserId, listId, query])
-  const sections = useMemo(() => sectionsByWhen(shown, today, addDaysISO(today, 7), addDaysISO(today, -14)), [shown, today])
+  const sections = useMemo(() => {
+    // A task ticked a moment ago is placed as if still open; the row itself shows it done.
+    const byId = new Map(shown.map(t => [t.id, t]))
+    const placed = shown.map(t => (settling.has(t.id) ? { ...t, progress: 'not_started' } : t))
+    return sectionsByWhen(placed, today, addDaysISO(today, 7), addDaysISO(today, -14))
+      .map(s => ({ ...s, tasks: s.tasks.map(t => byId.get(t.id) ?? t) }))
+  }, [shown, today, settling])
 
   const [fieldDialog, setFieldDialog] = useState<{ field?: TaskField } | null>(null)
   const [listsOpen, setListsOpen] = useState(false)
@@ -121,6 +145,26 @@ export function TasksView(props: Props) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const isCollapsed = (s: TaskSection) => collapsed[s.key] ?? !!s.collapsedByDefault
   const openTask = openId ? tasks.find(t => t.id === openId) ?? null : null
+
+  // A link to another list or view while already here (a notification, the sidebar) moves the screen there.
+  const linkKey = `${props.everyone ? 1 : 0}:${props.listId ?? ''}:${props.openTaskId ?? ''}`
+  const [seenLink, setSeenLink] = useState(linkKey)
+  if (seenLink !== linkKey) {
+    setSeenLink(linkKey)
+    setEveryone(!!props.everyone || !currentUserId)
+    setListId(props.listId && boards.some(b => b.id === props.listId) ? props.listId : null)
+    if (props.openTaskId) setOpenId(props.openTaskId)
+  }
+
+  // Keep what you're looking at in the address, so a refresh or a shared link lands on the same view.
+  useEffect(() => {
+    const url = new URL(window.location.href)
+    for (const k of ['view', 'group', 'mine']) url.searchParams.delete(k)
+    if (everyone && currentUserId) url.searchParams.set('who', 'all'); else url.searchParams.delete('who')
+    if (listId) url.searchParams.set('list', listId); else url.searchParams.delete('list')
+    if (openId) url.searchParams.set('task', openId); else url.searchParams.delete('task')
+    if (url.href !== window.location.href) window.history.replaceState(window.history.state, '', url)
+  }, [everyone, listId, openId, currentUserId])
 
   const open = shown.filter(t => t.progress !== 'completed')
   const overdue = open.filter(t => t.due_date && t.due_date < today).length
@@ -144,7 +188,7 @@ export function TasksView(props: Props) {
         </div>
       ) : (
         <>
-          {!readOnly && <QuickAddBar key={listId ?? 'any'} boards={boards} members={members} currentUserId={currentUserId} today={today} listId={listId} />}
+          {!readOnly && <QuickAddBar key={listId ?? 'any'} boards={boards} members={members} currentUserId={currentUserId} today={today} listId={listId} mineOnly={!everyone} />}
 
           {/* Whose tasks, and which list. */}
           <div data-tour="task-filters" className="no-scrollbar -mx-4 mb-5 flex items-center gap-2 overflow-x-auto px-4 sm:mx-0 sm:px-0">
