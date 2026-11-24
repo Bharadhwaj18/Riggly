@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     price: l?.price != null && Number.isFinite(Number(l.price)) ? Math.max(0, Number(l.price)) : null,
   }))
   if (cleanLines.some(l => !l.variant_id || !(l.qty > 0))) {
-    return NextResponse.json({ error: 'Every item needs a Rigly size and a quantity.' }, { status: 400 })
+    return NextResponse.json({ error: 'Every item needs a Riggly size and a quantity.' }, { status: 400 })
   }
 
   const { workspaceId, holderId } = storeConfig()

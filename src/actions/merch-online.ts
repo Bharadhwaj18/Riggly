@@ -7,7 +7,7 @@ import { callWebsite, storeConfig } from '@/lib/store-api'
 
 type Result = { error?: string; refundInFinance?: boolean }
 
-// Website orders are shipped and cancelled through the website, which emails the customer and then tells Rigly,
+// Website orders are shipped and cancelled through the website, which emails the customer and then tells Riggly,
 // so both sides always agree. Only owners, admins and the Merch role can do either.
 async function orderFor(id: string): Promise<{ error: string } | { websiteOrderId: string }> {
   const ctx = await getWorkspaceContext()

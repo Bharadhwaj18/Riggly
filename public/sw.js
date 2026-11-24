@@ -40,7 +40,7 @@ self.addEventListener('push', event => {
     // Not JSON — fall through to the defaults below.
   }
   event.waitUntil(
-    self.registration.showNotification(data.title || 'Rigly', {
+    self.registration.showNotification(data.title || 'Riggly', {
       body: data.body || '',
       data: { link: data.link || '/' },
       icon: '/icon-192.png',

@@ -1,4 +1,4 @@
-# Rigly
+# Riggly
 
 The app my band runs on. Rehearsals, setlists, chord charts, gigs and money - one PWA the whole band uses on stage and off.
 

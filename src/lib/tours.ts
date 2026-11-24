@@ -45,7 +45,7 @@ export const TOURS: Tour[] = [
     blurb: 'Today, the menu, and adding things from anywhere.',
     startPath: '/',
     steps: [
-      { path: '^/$', title: 'Welcome to Rigly', brief: true, body: 'This is Today: what’s coming up for your band, at a glance. It takes a minute to show you around.' },
+      { path: '^/$', title: 'Welcome to Riggly', brief: true, body: 'This is Today: what’s coming up for your band, at a glance. It takes a minute to show you around.' },
       { path: '^/$', target: ['[data-tour="today-hero-show"]', '[data-tour="today-hero-event"]', '[data-tour="today-hero-empty"]'], title: 'What’s next', brief: true, body: 'Your next show or event, with its setlist. Tap through to everything about it.' },
       { path: '^/$', section: 'tasks', target: ['[data-tour="today-tasks"]'], title: 'Your tasks', body: 'Things assigned to you, soonest first. Overdue ones turn red.' },
       { path: '^/$', target: ['[data-tour="today-actions"]', '[aria-label="Add something"]'], title: 'Add things fast', body: 'Add a show, setlist or song from here. On a phone, the + button does the same from any page.' },
@@ -114,7 +114,7 @@ export const TOURS: Tour[] = [
     startPath: '/calendar',
     steps: [
       { path: '^/calendar$', target: ['[data-tour="calendar-month"]'], title: 'The month', brief: true, body: 'Shows, events, task due dates and who’s away, all together. Swipe or use the arrows to change month.' },
-      { path: '^/calendar$', target: ['[aria-label="What to show"]'], title: 'Only what you need', body: 'Tap a kind to hide or show it. Rigly remembers your choice on this device.' },
+      { path: '^/calendar$', target: ['[aria-label="What to show"]'], title: 'Only what you need', body: 'Tap a kind to hide or show it. Riggly remembers your choice on this device.' },
       { path: '^/calendar$', target: ['[data-tour="calendar-day"]'], title: 'A day', body: 'Tap any day to see what’s on, and add an event, a show, a task or mark yourself away.' },
     ],
   },
@@ -163,12 +163,12 @@ export function buildWalkthrough(tours: Tour[]): Tour {
     steps.push(...brief.map(s => ({ ...s })))
   }
   const last = steps[steps.length - 1]
-  steps.push({ path: last?.path ?? '.*', title: 'That’s Rigly', body: 'Try things out here in the demo, then create your own workspace and invite your band. Settings → Help & tours has a longer tour of each part.' })
+  steps.push({ path: last?.path ?? '.*', title: 'That’s Riggly', body: 'Try things out here in the demo, then create your own workspace and invite your band. Settings → Help & tours has a longer tour of each part.' })
   return {
     id: WALKTHROUGH_ID,
     section: null,
     title: 'Quick walkthrough',
-    blurb: 'The key parts of Rigly in under a minute.',
+    blurb: 'The key parts of Riggly in under a minute.',
     startPath: '/',
     steps,
   }

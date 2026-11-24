@@ -89,7 +89,7 @@ export function OnlineOrders({ orders, canAct }: { orders: OnlineOrder[]; canAct
               {o.stock_short && o.status !== 'cancelled' && (
                 <p className="mt-3 flex gap-1.5 rounded-xl bg-amber-50 p-2.5 text-xs text-amber-800">
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  <span>Rigly didn’t have enough of this left when it was paid for. Check the box before shipping, or cancel and refund.</span>
+                  <span>Riggly didn’t have enough of this left when it was paid for. Check the box before shipping, or cancel and refund.</span>
                 </p>
               )}
               {o.refund_in_finance && (
@@ -177,7 +177,7 @@ function CancelModal({ order, onClose }: { order: OnlineOrder | null; onClose: (
   return (
     <Modal open={!!order} onOpenChange={open => { if (!open) onClose() }} title="Cancel this order?" description={order ? `${order.customer_name} · #${order.website_order_id.slice(0, 8)}` : undefined} className="max-w-[440px] rounded-2xl">
       <form onSubmit={submit} className="space-y-4">
-        <p className="text-sm text-gray-600">The stock goes back and the customer gets an email. Refund the money from the PhonePe dashboard yourself: Rigly and the website don’t send refunds.</p>
+        <p className="text-sm text-gray-600">The stock goes back and the customer gets an email. Refund the money from the PhonePe dashboard yourself: Riggly and the website don’t send refunds.</p>
         <div>
           <Label htmlFor="cancel-reason">Why (the customer sees this)</Label>
           <Textarea id="cancel-reason" value={reason} onChange={e => setReason(e.target.value)} rows={3} placeholder="e.g. That size sold out at a show." />

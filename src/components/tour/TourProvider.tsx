@@ -187,7 +187,7 @@ export function TourProvider({ userId, inDemo, hiddenSections, children }: {
       {offer && !active && (
         <div role="dialog" aria-label={`${offer.title} tour`} className="animate-fade-up fixed bottom-24 left-4 right-4 z-[60] rounded-2xl border border-brand-300 bg-white p-4 shadow-xl sm:right-auto sm:w-80 lg:bottom-6">
           <p className="text-xs font-bold uppercase tracking-[0.1em] text-brand-600">New here?</p>
-          <p className="mt-1 text-sm font-bold text-gray-900">{offer.id === WALKTHROUGH_ID ? 'Take a walk through Rigly' : `Take the 30-second ${offer.title} tour`}</p>
+          <p className="mt-1 text-sm font-bold text-gray-900">{offer.id === WALKTHROUGH_ID ? 'Take a walk through Riggly' : `Take the 30-second ${offer.title} tour`}</p>
           <p className="mt-0.5 text-xs text-gray-500">{offer.blurb} It’s under Demo at the top whenever you want it.</p>
           <div className="mt-3 flex items-center gap-2">
             <button type="button" onClick={() => start(offer.id)} className="rounded-lg bg-brand-400 px-3.5 py-2 text-sm font-bold text-white hover:bg-brand-500">Show me</button>

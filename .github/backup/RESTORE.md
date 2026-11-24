@@ -1,4 +1,4 @@
-# Restoring Rigly
+# Restoring Riggly
 
 This repo is written by the `Backup Supabase` workflow in
 [tarana-setlist-manager](https://github.com/Bharadhwaj18/tarana-setlist-manager/blob/main/.github/workflows/backup.yml)

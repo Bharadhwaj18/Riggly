@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils'
 
 /**
- * The Rigly app mark: a bold lowercase "r" with a spotlight dot, the same dot that sits on the "i" in the
+ * The Riggly app mark: a bold lowercase "r" with a spotlight dot, the same dot that sits on the "i" in the
  * wordmark. The r takes the surrounding text colour; the dot uses the accent colour (sage on light surfaces,
  * a brighter green in dark mode).
  */

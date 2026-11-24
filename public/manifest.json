@@ -1,6 +1,6 @@
 {
-  "name": "Rigly",
-  "short_name": "Rigly",
+  "name": "Riggly",
+  "short_name": "Riggly",
   "description": "Band setlist and chord chart manager",
   "start_url": "/",
   "display": "standalone",

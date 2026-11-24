@@ -1,11 +1,11 @@
 import crypto from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 
-// The band website and Rigly talk server to server, both ways, signed with the same shared secret.
-//   STORE_API_KEY       shared secret, the same value on both sides (Rigly and the website's Vercel projects)
+// The band website and Riggly talk server to server, both ways, signed with the same shared secret.
+//   STORE_API_KEY       shared secret, the same value on both sides (Riggly and the website's Vercel projects)
 //   STORE_WORKSPACE_ID  the one workspace the website sells for
 //   STORE_SALE_HOLDER_ID who's holding online money in Finance (the person PhonePe pays out to)
-//   STORE_WEBSITE_URL   where Rigly asks the website to ship or cancel an order, e.g. https://taranaband.in
+//   STORE_WEBSITE_URL   where Riggly asks the website to ship or cancel an order, e.g. https://taranaband.in
 // Server-only: never import this from client code.
 
 export function storeConfig() {
@@ -32,7 +32,7 @@ export function rejectUnlessStore(request: NextRequest): NextResponse | null {
   return null
 }
 
-/** Asks the website to ship or cancel one of its orders; the website sends the customer email and tells Rigly back. */
+/** Asks the website to ship or cancel one of its orders; the website sends the customer email and tells Riggly back. */
 export async function callWebsite(path: string, body: unknown): Promise<{ ok: true; data: Record<string, unknown> & { rigly?: { refund_in_finance?: boolean } } } | { ok: false; error: string }> {
   const { key, websiteUrl } = storeConfig()
   if (!key || !websiteUrl) return { ok: false, error: 'The website link isn’t set up.' }
