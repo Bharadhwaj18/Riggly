@@ -1,11 +1,12 @@
 'use client'
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { ArrowLeft, ArrowRight, Hand, X } from 'lucide-react'
 import { useToast } from '@/components/ui/Toaster'
 import { cn } from '@/lib/utils'
 import { buildWalkthrough, pathMatches, tourForPath, toursFor, WALKTHROUGH_ID, type Tour } from '@/lib/tours'
+import { placeTourCard } from '@/lib/tour-placement'
 import type { SectionKey } from '@/lib/workspace-sections'
 
 interface TourState { done: string[]; dismissed: string[] }
@@ -245,28 +246,47 @@ function TourCard({ tour, index, hole, onBack, onNext, onEnd, onDoIt }: {
   const step = tour.steps[index]
   const last = index === tour.steps.length - 1
   const tap = step.action === 'tap' && !!hole
+  // Measure the card and the visible screen, so the whole card stays on screen (phones with a short screen or the
+  // keyboard up included).
+  const ref = useRef<HTMLDivElement>(null)
+  const [cardHeight, setCardHeight] = useState(0)
+  const [view, setView] = useState<{ width: number; height: number } | null>(null)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const measure = () => {
+      setCardHeight(el.offsetHeight)
+      const vv = window.visualViewport
+      setView({ width: vv?.width ?? window.innerWidth, height: vv?.height ?? window.innerHeight })
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    window.addEventListener('resize', measure)
+    window.visualViewport?.addEventListener('resize', measure)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', measure)
+      window.visualViewport?.removeEventListener('resize', measure)
+    }
+  }, [])
   // Below the spotlight when there's room, otherwise above it; in the middle when there's nothing to point at.
   const style: React.CSSProperties = {}
-  if (hole && typeof window !== 'undefined') {
-    const vw = window.innerWidth
-    const vh = window.innerHeight
-    const width = Math.min(340, vw - 32)
-    const left = Math.min(Math.max(16, hole.left + hole.width / 2 - width / 2), vw - width - 16)
-    style.width = width
-    style.left = left
-    if (hole.top + hole.height + 220 < vh) style.top = hole.top + hole.height + 12
-    else if (hole.top > 240) style.bottom = vh - hole.top + 12
-    else style.bottom = 96
+  if (hole && view) {
+    const p = placeTourCard(hole, { height: cardHeight || 200 }, view)
+    Object.assign(style, p)
   }
   const prevSamePage = index > 0 && tour.steps[index - 1].path === step.path && tour.steps[index - 1].action !== 'tap'
 
   return (
     <div
+      ref={ref}
       role="dialog"
       aria-label={step.title}
       className={cn(
-        'animate-fade-up fixed z-[61] rounded-2xl border border-brand-200 bg-white p-4 shadow-2xl',
-        !hole && 'left-1/2 top-1/2 w-[min(360px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2',
+        'animate-fade-up fixed z-[61] overflow-y-auto overscroll-contain rounded-2xl border border-brand-200 bg-white p-4 shadow-2xl',
+        !hole && 'left-1/2 top-1/2 max-h-[calc(100dvh-24px)] w-[min(360px,calc(100vw-24px))] -translate-x-1/2 -translate-y-1/2',
+        hole && !view && 'invisible',
       )}
       style={style}
     >
