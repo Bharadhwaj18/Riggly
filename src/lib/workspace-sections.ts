@@ -13,11 +13,11 @@ export const SECTIONS = [
 ] as const
 
 export type SectionKey = (typeof SECTIONS)[number]['key']
-/** 'edit' = see and change, 'view' = see only, 'none' = hidden. */
-export type SectionLevel = 'edit' | 'view' | 'none'
+/** 'edit' = see and change, 'view' = see only, 'items' = only the items shared with them, 'none' = hidden. */
+export type SectionLevel = 'edit' | 'view' | 'items' | 'none'
 export type SectionLevels = Record<SectionKey, SectionLevel>
 
-const LEVELS: readonly SectionLevel[] = ['edit', 'view', 'none']
+const LEVELS: readonly SectionLevel[] = ['edit', 'view', 'items', 'none']
 
 /** The levels a member has. Owners and admins always have full edit. A missing entry means full edit too. */
 export function sectionLevelsFrom(raw: unknown, role: string): SectionLevels {

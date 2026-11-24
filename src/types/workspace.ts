@@ -1,6 +1,6 @@
 import type { Database } from './database'
 import type { SectionLevels, WorkspaceFeatures } from '@/lib/workspace-sections'
-import type { SetlistGuest } from '@/lib/setlist-guest'
+import type { AccessGrant } from '@/lib/access'
 
 export type Workspace = Database['public']['Tables']['workspaces']['Row']
 export type WorkspaceMember = Database['public']['Tables']['workspace_members']['Row']
@@ -14,8 +14,14 @@ export interface WorkspaceMembership {
   sections: SectionLevels
   /** Sections this workspace has switched on (set in the admin panel). Off means hidden for everyone. */
   features: WorkspaceFeatures
-  /** Set when this member is a setlist guest: only the setlists picked for them, view only, until a date. */
-  guest?: SetlistGuest | null
+  /** Their last day here ('YYYY-MM-DD', India time), or null for no end. */
+  accessUntil?: string | null
+  /** Past their last day: they see nothing. */
+  accessEnded?: boolean
+  /** Can change other members' access (owners and admins always can). */
+  accessManager?: boolean
+  /** Items shared with them (filled in for the current workspace only). */
+  grants?: AccessGrant[]
 }
 
 export interface WorkspaceContext {

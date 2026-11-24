@@ -4,8 +4,9 @@ import { createClient } from '@/lib/supabase/server'
 import { getCachedUser } from '@/lib/auth-cache'
 import { WORKSPACE_COOKIE, pickCurrentWorkspace, normalisePermissions } from '@/lib/workspace-shared'
 import type { WorkspaceContext, WorkspaceMembership } from '@/types/workspace'
-import { featuresFrom, hiddenSectionsOf, sectionLevelsFrom, withFeatures, type SectionKey } from '@/lib/workspace-sections'
-import { guestSectionLevels, setlistGuestFrom } from '@/lib/setlist-guest'
+import { featuresFrom, hiddenSectionsOf, withFeatures, type SectionKey } from '@/lib/workspace-sections'
+import { accessUntilFrom, grantsFromRows, isAccessManager, isPastLastDay, liveGrants, scopesFrom } from '@/lib/access'
+import { SECTIONS } from '@/lib/workspace-sections'
 
 /**
  * The signed-in user's workspaces plus which one is currently selected
@@ -36,9 +37,12 @@ export const getWorkspaceContext = cache(async (): Promise<WorkspaceContext | nu
       return workspace
         ? ((): WorkspaceMembership => {
             const features = featuresFrom(workspace.settings)
-            const guest = setlistGuestFrom(m.permissions, m.role)
-            const levels = guest ? guestSectionLevels(guest.ended) : sectionLevelsFrom(m.permissions, m.role)
-            return { workspace, role: m.role, permissions: normalisePermissions(m.permissions), features, sections: withFeatures(levels, features), guest }
+            const accessUntil = accessUntilFrom(m.permissions, m.role)
+            return {
+              workspace, role: m.role, permissions: normalisePermissions(m.permissions), features,
+              sections: withFeatures(scopesFrom(m.permissions, m.role), features),
+              accessUntil, accessEnded: isPastLastDay(accessUntil), accessManager: isAccessManager(m.permissions, m.role),
+            }
           })()
         : null
     })
@@ -48,8 +52,15 @@ export const getWorkspaceContext = cache(async (): Promise<WorkspaceContext | nu
   const cookieStore = await cookies()
   // The phone app names its workspace in a header; it's checked against your memberships like the cookie is.
   const wanted = (await headers()).get('x-workspace-id') ?? cookieStore.get(WORKSPACE_COOKIE)?.value
-  const current = pickCurrentWorkspace(memberships, wanted)
-  return { userId: user.id, current, memberships }
+  const picked = pickCurrentWorkspace(memberships, wanted)
+  // What's shared with them here (only matters where a feature is set to 'only these items').
+  let grants: ReturnType<typeof grantsFromRows> = []
+  if (Object.values(picked.sections).includes('items')) {
+    const { data } = await supabase.from('access_grants').select('section, item_id, level, until').eq('workspace_id', picked.workspace.id).eq('user_id', user.id)
+    grants = grantsFromRows(data ?? [])
+  }
+  const current = { ...picked, grants }
+  return { userId: user.id, current, memberships: memberships.map(m => (m === picked ? current : m)) }
 })
 
 /** The workspace id every read/write should be scoped to. Throws if there isn't one. */
@@ -82,19 +93,37 @@ export type MerchScope = 'full' | 'crew' | 'none'
  */
 export function merchScopeOf(membership: WorkspaceMembership): MerchScope {
   if (!membership.features.merch) return 'none'
+  if (membership.accessEnded) return 'none'
   if (isMerchApprover(membership)) return 'full'
-  if (hasPermission(membership, 'merch_crew')) return 'crew'
+  if (membership.sections.merch === 'items' || hasPermission(membership, 'merch_crew')) return 'crew'
   return membership.sections.merch === 'none' ? 'none' : 'full'
 }
 
+/** Where a shared item opens on its own, by feature (features without a page per item open their list). */
+const ITEM_PATH: Partial<Record<SectionKey, (id: string) => string>> = {
+  shows: id => `/shows/${id}`,
+  setlists: id => `/setlists/${id}`,
+  songs: id => `/songs/${id}`,
+  merch: id => `/merch/kits/${id}`,
+}
+
 /**
- * Sections hidden from the nav. Merch crew still get the Merch link (it opens their kits). Setlist guests only get
- * Setlists: Songs is open to them only so a song's chord chart opens from their setlist.
+ * For someone whose only access is a few shared items in one feature: the page to open instead of Today
+ * (the item itself when there's just one). Null for everyone else.
  */
+export function focusedShare(m: WorkspaceMembership): string | null {
+  if (m.role === 'owner' || m.role === 'admin') return null
+  const open = SECTIONS.filter(s => m.sections[s.key] !== 'none')
+  if (open.length !== 1 || m.sections[open[0].key] !== 'items') return null
+  const sec = open[0]
+  const mine = liveGrants(m.grants ?? []).filter(g => g.section === sec.key)
+  const path = ITEM_PATH[sec.key]
+  return mine.length === 1 && path ? path(mine[0].itemId) : sec.href
+}
+
+/** Sections hidden from the nav: the ones set to nothing. 'Only these items' still shows (it opens what's shared). */
 export function navHiddenSections(membership: WorkspaceMembership): SectionKey[] {
-  const hidden = hiddenSectionsOf(membership.sections)
-  if (membership.guest) return hidden.includes('songs') ? hidden : [...hidden, 'songs']
-  return merchScopeOf(membership) === 'crew' ? hidden.filter(k => k !== 'merch') : hidden
+  return hiddenSectionsOf(membership.sections)
 }
 
 /** Treasurer in the currently selected workspace. */

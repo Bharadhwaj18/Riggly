@@ -10,7 +10,8 @@ import { getWorkspaceContext } from '@/lib/workspace'
 import { PENDING_INVITE_COOKIE, WORKSPACE_COOKIE } from '@/lib/workspace-shared'
 import { chooseWorkspace } from '@/lib/workspace-cookies'
 import { SECTIONS, type SectionLevel, type SectionKey } from '@/lib/workspace-sections'
-import { guestSectionLevels, istToday, setlistGuestFrom } from '@/lib/setlist-guest'
+import { istToday, type AccessGrant } from '@/lib/access'
+import type { Json } from '@/types/database'
 import { addDaysISO } from '@/lib/dates'
 import { createWorkspaceInputSchema, updateWorkspaceDetailsSchema, type CreateWorkspaceInput, type UpdateWorkspaceDetailsInput } from '@/lib/validators'
 
@@ -102,37 +103,47 @@ export async function transferOwnership(userId: string): Promise<{ error?: strin
   return {}
 }
 
-export interface CreateInviteInput {
-  /**
-   * 'crew' joins as a member who is Merch crew: only their own show kits in Merch, plus the sections given.
-   * 'guest' joins as a setlist guest: only the setlists given, view only, until accessUntil.
-   */
-  role: 'member' | 'admin' | 'crew' | 'guest'
-  expiresInDays: number
-  maxUses: number | null
-  /** What a member who joins with this link can open. Ignored for admins, who always get everything. */
-  sections?: Partial<Record<SectionKey, SectionLevel>>
-  /** Setlist guests: the setlists they can see. */
-  setlistIds?: string[]
-  /** Setlist guests: their last day, 'YYYY-MM-DD'. */
-  accessUntil?: string
+export interface AccessInput {
+  /** Per feature: 'none' | 'items' | 'view' | 'edit'. */
+  sections: Partial<Record<SectionKey, SectionLevel>>
+  /** Last day, 'YYYY-MM-DD', or null for no end. */
+  accessUntil: string | null
+  /** The items shared with them (used where a feature is 'items'). */
+  grants: AccessGrant[]
 }
 
-/** The longest a setlist guest's access can run. */
-const GUEST_MAX_DAYS = 366
+/** The longest anyone's access, or one shared item, can be set to run. */
+const MAX_ACCESS_DAYS = 366
 
-/** Checks a guest's setlists (all in this workspace, at least one) and last day (today to a year away). */
-async function checkGuestAccess(workspaceId: string, setlistIds: unknown, accessUntil: unknown): Promise<{ error: string } | { ids: string[]; until: string }> {
-  const ids = Array.isArray(setlistIds) ? [...new Set(setlistIds.filter((x): x is string => typeof x === 'string'))] : []
-  if (!ids.length) return { error: 'Pick at least one setlist.' }
-  if (typeof accessUntil !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(accessUntil)) return { error: 'Pick the last day they can look.' }
+/** Cleans up an access choice: known features and levels only, valid days, grants only for 'items' features. */
+function cleanAccess(input: AccessInput): { error: string } | { sections: Record<string, SectionLevel>; accessUntil: string | null; grants: { section: string; item_id: string; level: string; until: string | null }[] } {
   const today = istToday()
-  if (accessUntil < today) return { error: 'The last day can’t be in the past.' }
-  if (accessUntil > addDaysISO(today, GUEST_MAX_DAYS)) return { error: 'Access can run for up to a year.' }
-  const supabase = await createClient()
-  const { data } = await supabase.from('setlists').select('id').eq('workspace_id', workspaceId).in('id', ids)
-  if ((data ?? []).length !== ids.length) return { error: 'One of those setlists isn’t in this workspace any more. Refresh and try again.' }
-  return { ids, until: accessUntil }
+  const latest = addDaysISO(today, MAX_ACCESS_DAYS)
+  const isDay = (d: unknown): d is string => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)
+  const sections: Record<string, SectionLevel> = {}
+  for (const s of SECTIONS) {
+    const v = input.sections?.[s.key]
+    if (v === 'none' || v === 'items' || v === 'view' || v === 'edit') sections[s.key] = v
+  }
+  if (input.accessUntil !== null && input.accessUntil !== undefined) {
+    if (!isDay(input.accessUntil)) return { error: 'Pick a last day, or choose no end date.' }
+    if (input.accessUntil < today) return { error: 'The last day can’t be in the past.' }
+    if (input.accessUntil > latest) return { error: 'Access can be set for up to a year at a time.' }
+  }
+  const seen = new Set<string>()
+  const grants = (Array.isArray(input.grants) ? input.grants : [])
+    .filter(g => sections[g.section] === 'items' && typeof g.itemId === 'string' && !seen.has(g.section + g.itemId) && seen.add(g.section + g.itemId))
+    .map(g => ({ section: g.section, item_id: g.itemId, level: g.level === 'edit' ? 'edit' : 'view', until: isDay(g.until) ? g.until : null }))
+  if (grants.some(g => g.until && (g.until < today || g.until > latest))) return { error: 'A shared item’s last day must be between today and a year from now.' }
+  return { sections, accessUntil: input.accessUntil ?? null, grants }
+}
+
+export interface CreateInviteInput {
+  role: 'member' | 'admin'
+  expiresInDays: number
+  maxUses: number | null
+  /** What a member joining with this link gets. Ignored for admins, who always get everything. */
+  access?: AccessInput
 }
 
 export async function createInvite(input: CreateInviteInput): Promise<{ error?: string; token?: string }> {
@@ -144,39 +155,19 @@ export async function createInvite(input: CreateInviteInput): Promise<{ error?: 
   if (input.maxUses !== null && (!Number.isInteger(input.maxUses) || input.maxUses < 1)) {
     return { error: 'Max uses must be at least 1.' }
   }
-  if (input.role === 'guest') {
-    const checked = await checkGuestAccess(auth.workspaceId, input.setlistIds, input.accessUntil)
-    if ('error' in checked) return { error: checked.error }
-    const supabase = await createClient()
-    const { data, error } = await supabase
-      .from('workspace_invites')
-      .insert({
-        workspace_id: auth.workspaceId,
-        role: 'member',
-        permissions: { sections: guestSectionLevels(false), setlist_guest: true, setlist_ids: checked.ids, access_until: checked.until },
-        max_uses: input.maxUses,
-        expires_at: new Date(Date.now() + input.expiresInDays * 86_400_000).toISOString(),
-      })
-      .select('token')
-      .single()
-    if (error) return { error: error.message }
-    revalidatePath('/settings', 'layout')
-    return { token: data.token }
+  let permissions: Record<string, unknown> = {}
+  if (input.role !== 'admin' && input.access) {
+    const access = cleanAccess(input.access)
+    if ('error' in access) return { error: access.error }
+    permissions = { sections: access.sections, grants: access.grants, ...(access.accessUntil ? { access_until: access.accessUntil } : {}) }
   }
-  const allowed = new Set<string>(SECTIONS.map(s => s.key))
-  const crew = input.role === 'crew'
-  const sections = input.role !== 'admin' && input.sections
-    ? Object.fromEntries(Object.entries(input.sections).filter(([k, v]) => allowed.has(k) && (v === 'edit' || v === 'view' || v === 'none')))
-    : null
-  // Crew see Merch through their kits only, so the Merch section itself stays hidden from them.
-  if (crew && sections) sections.merch = 'none'
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('workspace_invites')
     .insert({
       workspace_id: auth.workspaceId,
-      role: crew ? 'member' : input.role,
-      permissions: { ...(sections ? { sections } : {}), ...(crew ? { merch_crew: true } : {}) },
+      role: input.role,
+      permissions: permissions as Json,
       max_uses: input.maxUses,
       expires_at: new Date(Date.now() + input.expiresInDays * 86_400_000).toISOString(),
     })
@@ -220,15 +211,7 @@ export async function setMemberMerchManager(userId: string, on: boolean): Promis
   return setMemberPermission(userId, 'merch_manager', on)
 }
 
-/**
- * Merch crew: someone who runs the merch stall. In Merch they only ever see the show kits they're put on (nothing
- * until they're on one). Their other sections stay as they are.
- */
-export async function setMemberMerchCrew(userId: string, on: boolean): Promise<{ error?: string }> {
-  return setMemberPermission(userId, 'merch_crew', on)
-}
-
-async function setMemberPermission(userId: string, key: 'treasurer' | 'merch_manager' | 'merch_crew', on: boolean, sections?: Record<string, string>): Promise<{ error?: string }> {
+async function setMemberPermission(userId: string, key: 'treasurer' | 'merch_manager', on: boolean): Promise<{ error?: string }> {
   const auth = await requireAdminContext()
   if ('error' in auth) return { error: auth.error }
   const supabase = await createClient()
@@ -240,7 +223,7 @@ async function setMemberPermission(userId: string, key: 'treasurer' | 'merch_man
     .maybeSingle()
   if (!member) return { error: 'Member not found.' }
   const raw = member.permissions && typeof member.permissions === 'object' && !Array.isArray(member.permissions) ? member.permissions : {}
-  const permissions = { ...raw, [key]: on, ...(sections ? { sections } : {}) }
+  const permissions = { ...raw, [key]: on }
   const { error } = await supabase
     .from('workspace_members')
     .update({ permissions })
@@ -251,28 +234,28 @@ async function setMemberPermission(userId: string, key: 'treasurer' | 'merch_man
   return {}
 }
 
-/** Changes which setlists a setlist guest can see, and their last day. Admins only, and only for guests. */
-export async function setGuestAccess(userId: string, setlistIds: string[], accessUntil: string): Promise<{ error?: string }> {
-  const auth = await requireAdminContext()
-  if ('error' in auth) return { error: auth.error }
+/**
+ * Everything about one member's access at once: per-feature levels, the items shared with them, their last day,
+ * and (admins only) whether they're an Access manager. Owner, admins and Access managers; never the owner, an
+ * admin or yourself. The database checks all of this again.
+ */
+export async function setMemberAccess(userId: string, input: AccessInput & { accessManager?: boolean }): Promise<{ error?: string }> {
+  const ctx = await getWorkspaceContext()
+  if (!ctx) return { error: 'Not authenticated' }
+  const { workspace } = ctx.current
+  if (workspace.type === 'personal') return { error: 'This is your personal space, it has no members to manage.' }
+  const access = cleanAccess(input)
+  if ('error' in access) return { error: access.error }
   const supabase = await createClient()
-  const { data: member } = await supabase
-    .from('workspace_members')
-    .select('permissions, role')
-    .eq('workspace_id', auth.workspaceId)
-    .eq('user_id', userId)
-    .maybeSingle()
-  if (!member) return { error: 'Member not found.' }
-  if (!setlistGuestFrom(member.permissions, member.role)) return { error: 'They aren’t a setlist guest.' }
-  const checked = await checkGuestAccess(auth.workspaceId, setlistIds, accessUntil)
-  if ('error' in checked) return { error: checked.error }
-  const raw = member.permissions && typeof member.permissions === 'object' && !Array.isArray(member.permissions) ? member.permissions : {}
-  const { error } = await supabase
-    .from('workspace_members')
-    .update({ permissions: { ...raw, setlist_ids: checked.ids, access_until: checked.until } })
-    .eq('workspace_id', auth.workspaceId)
-    .eq('user_id', userId)
-  if (error) return { error: error.message }
+  const { error } = await supabase.rpc('set_member_access', {
+    p_ws: workspace.id,
+    p_user: userId,
+    p_sections: access.sections as Json,
+    p_access_until: access.accessUntil,
+    p_grants: access.grants as Json,
+    p_access_manager: input.accessManager ?? null,
+  })
+  if (error) return { error: error.code === 'PGRST202' ? 'Run the new access SQL in Supabase first.' : error.message }
   revalidatePath('/', 'layout')
   return {}
 }
@@ -367,37 +350,6 @@ export async function deleteWorkspace(confirmName: string): Promise<{ error?: st
     type: 'workspace_deleted',
   })))
 
-  revalidatePath('/', 'layout')
-  return {}
-}
-
-/** Sets what sections a member can see (none / view / edit). Owners and admins can't be restricted. */
-export async function setMemberSections(userId: string, levels: Partial<Record<SectionKey, SectionLevel>>): Promise<{ error?: string }> {
-  const auth = await requireAdminContext()
-  if ('error' in auth) return { error: auth.error }
-  const supabase = await createClient()
-  const { data: member } = await supabase
-    .from('workspace_members')
-    .select('permissions, role')
-    .eq('workspace_id', auth.workspaceId)
-    .eq('user_id', userId)
-    .maybeSingle()
-  if (!member) return { error: 'Member not found.' }
-  if (member.role === 'owner' || member.role === 'admin') return { error: 'Owners and admins always have access to everything.' }
-
-  const raw = member.permissions && typeof member.permissions === 'object' && !Array.isArray(member.permissions) ? (member.permissions as Record<string, unknown>) : {}
-  const current = raw.sections && typeof raw.sections === 'object' && !Array.isArray(raw.sections) ? (raw.sections as Record<string, string>) : {}
-  const allowed = new Set<string>(SECTIONS.map(s => s.key))
-  const next: Record<string, string> = { ...current }
-  for (const [key, level] of Object.entries(levels)) {
-    if (allowed.has(key) && (level === 'edit' || level === 'view' || level === 'none')) next[key] = level
-  }
-  const { error } = await supabase
-    .from('workspace_members')
-    .update({ permissions: { ...raw, sections: next } })
-    .eq('workspace_id', auth.workspaceId)
-    .eq('user_id', userId)
-  if (error) return { error: error.message }
   revalidatePath('/', 'layout')
   return {}
 }

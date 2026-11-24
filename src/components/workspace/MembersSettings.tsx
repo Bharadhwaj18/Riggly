@@ -3,16 +3,13 @@
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { KeyRound, Link2, ListMusic, Trash2, UserPlus, Users } from 'lucide-react'
-import { setMemberRole, setMemberTreasurer, setMemberMerchManager, setMemberMerchCrew, removeMember } from '@/actions/workspace'
+import { KeyRound, Link2, Trash2, UserPlus, Users } from 'lucide-react'
+import { setMemberRole, setMemberTreasurer, setMemberMerchManager, removeMember } from '@/actions/workspace'
 import { StatusPill } from '@/components/ui/StatusPill'
 import { UserAvatar } from '@/components/ui/UserAvatar'
-import { cn } from '@/lib/utils'
-import type { MemberRow, SetlistOption } from './settings-types'
-import { GuestAccessDialog } from './GuestAccessDialog'
-import { formatGuestDate } from '@/lib/setlist-guest'
-import { AccessDialog } from './AccessDialog'
-import { SECTIONS, type SectionKey } from '@/lib/workspace-sections'
+import type { MemberRow } from './settings-types'
+import { accessSummary, formatDay } from '@/lib/access'
+import type { SectionKey } from '@/lib/workspace-sections'
 import type { WorkspaceGroup } from '@/lib/groups'
 import { GroupTag, GroupsSection, MemberGroupsSheet } from '@/components/groups/GroupsSettings'
 import { Select } from '@/components/ui/Select'
@@ -24,24 +21,23 @@ interface Props {
   members: MemberRow[]
   isAdmin: boolean
   isOwner: boolean
+  /** Owner, admins and Access managers: can open someone's Access page. */
+  canManageAccess: boolean
   activeInviteCount: number
   groups: WorkspaceGroup[]
   /** Sections the workspace has switched off. */
   offSections?: SectionKey[]
-  /** For changing what setlist guests can see. */
-  setlists?: SetlistOption[]
-  /** 'YYYY-MM-DD' in India. */
-  today: string
 }
 
-export function MembersSettings({ workspaceName, members, isAdmin, isOwner, activeInviteCount, groups, offSections = [], setlists = [], today }: Props) {
+const chip = 'inline-flex items-center gap-1.5 rounded-lg border border-brand-200 px-2.5 py-1.5 text-xs font-bold text-gray-700 hover:bg-brand-50'
+
+export function MembersSettings({ workspaceName, members, isAdmin, isOwner, canManageAccess, activeInviteCount, groups, offSections = [] }: Props) {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
-  const [accessFor, setAccessFor] = useState<MemberRow | null>(null)
   const [groupsFor, setGroupsFor] = useState<MemberRow | null>(null)
-  const [guestFor, setGuestFor] = useState<MemberRow | null>(null)
-  const people = members.filter(m => !m.guest).map(m => ({ userId: m.userId, name: m.name, avatarUrl: m.avatarUrl }))
+  // Groups are for the band: people with only a few shared items aren't offered.
+  const people = members.filter(m => !m.limited).map(m => ({ userId: m.userId, name: m.name, avatarUrl: m.avatarUrl }))
 
   const run = (fn: () => Promise<{ error?: string }>) => {
     setError(null)
@@ -69,7 +65,9 @@ export function MembersSettings({ workspaceName, members, isAdmin, isOwner, acti
 
       <ul className="divide-y divide-brand-100 overflow-hidden rounded-2xl border border-brand-200 bg-white shadow-sm">
         {members.map(m => {
-          const manageable = isAdmin && m.role !== 'owner' && !m.isYou
+          const adminControls = isAdmin && m.role !== 'owner' && !m.isYou
+          const accessControl = canManageAccess && m.role === 'member' && !m.isYou
+          const summary = canManageAccess && m.role === 'member' ? accessSummary(m.sections, m.grantCounts, offSections) : null
           return (
             <li key={m.userId} className="animate-row-in flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
               <UserAvatar name={m.name} id={m.userId} avatarUrl={m.avatarUrl} size={40} />
@@ -77,65 +75,38 @@ export function MembersSettings({ workspaceName, members, isAdmin, isOwner, acti
                 <p className="truncate text-sm font-bold text-gray-900">
                   {m.name}{m.isYou && <span className="ml-2 rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-brand-700">You</span>}
                 </p>
-                <div className="mt-0.5 flex flex-wrap gap-1.5">
+                <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
                   <StatusPill tone={m.role === 'member' ? 'gray' : 'green'}>{ROLE_LABEL[m.role] ?? m.role}</StatusPill>
                   {m.treasurer && <StatusPill tone="amber">Treasurer</StatusPill>}
                   {m.merchManager && <StatusPill tone="amber">Merch</StatusPill>}
-                  {m.merchCrew && <StatusPill tone="gray">Merch crew</StatusPill>}
-                  {m.guest && <StatusPill tone="gray">Setlist guest</StatusPill>}
-                  {m.guest && (
-                    <span className="text-xs text-gray-500">
-                      {m.guest.setlistIds.length} {m.guest.setlistIds.length === 1 ? 'setlist' : 'setlists'}
-                      {m.guest.accessUntil && (m.guest.ended ? <> · <span className="font-bold text-amber-700">ended {formatGuestDate(m.guest.accessUntil)}</span></> : ` · until ${formatGuestDate(m.guest.accessUntil)}`)}
-                    </span>
-                  )}
-                  {isAdmin && m.role === 'member' && !m.guest && SECTIONS.some(sec => m.sections[sec.key] === 'none') && (
-                    <StatusPill tone="gray">Limited</StatusPill>
-                  )}
+                  {m.accessManager && <StatusPill tone="amber">Access manager</StatusPill>}
+                  {m.accessEnded ? <StatusPill tone="gray">Access ended</StatusPill>
+                    : m.accessUntil && <StatusPill tone="gray">Until {formatDay(m.accessUntil)}</StatusPill>}
                   {groups.filter(g => g.memberIds.includes(m.userId)).map(g => <GroupTag key={g.id} group={g} />)}
                 </div>
+                {summary && summary !== 'Everything' && <p className="mt-1 truncate text-xs text-gray-500">{summary}</p>}
               </div>
 
-              {isAdmin && groups.length > 0 && !m.guest && (
-                <button type="button" onClick={() => setGroupsFor(m)} aria-label={`Groups for ${m.name}`}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 px-2.5 py-1.5 text-xs font-bold text-gray-700 hover:bg-brand-50">
+              {isAdmin && groups.length > 0 && !m.limited && (
+                <button type="button" onClick={() => setGroupsFor(m)} aria-label={`Groups for ${m.name}`} className={chip}>
                   <Users className="h-3.5 w-3.5" /> Groups
                 </button>
               )}
-              {manageable && m.guest && (
-                <div className="flex items-center gap-2">
-                  <button type="button" disabled={pending} onClick={() => setGuestFor(m)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 px-2.5 py-1.5 text-xs font-bold text-gray-700 hover:bg-brand-50">
-                    <ListMusic className="h-3.5 w-3.5" /> Setlists
-                  </button>
-                  <button type="button" disabled={pending} aria-label={`Remove ${m.name}`}
-                    onClick={() => { if (window.confirm(`Remove ${m.name}? They won’t see any of ${workspaceName}’s setlists any more.`)) run(() => removeMember(m.userId)) }}
-                    className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              )}
-              {manageable && !m.guest && (
-                <div className="flex items-center gap-3">
-                  <label className="flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-gray-600">
-                    <input type="checkbox" checked={m.treasurer} disabled={pending} onChange={e => run(() => setMemberTreasurer(m.userId, e.target.checked))} className="h-4 w-4 accent-brand-400" />
-                    Treasurer
-                  </label>
-                  <label className="flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-gray-600" title="Can approve merch takings into Finance">
-                    <input type="checkbox" checked={m.merchManager} disabled={pending} onChange={e => run(() => setMemberMerchManager(m.userId, e.target.checked))} className="h-4 w-4 accent-brand-400" />
-                    Merch
-                  </label>
-                  <label className="flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-gray-600" title="Runs the merch stall: sees only the show kits they're put on">
-                    <input type="checkbox" checked={m.merchCrew} disabled={pending}
-                      onChange={e => {
-                        const on = e.target.checked
-                        if (on && !confirm(`Make ${m.name} Merch crew? In Merch they'll only see the show kits they're put on. Their other sections stay as they are (change them with Access).`)) return
-                        run(() => setMemberMerchCrew(m.userId, on))
-                      }}
-                      className="h-4 w-4 accent-brand-400" />
-                    Crew
-                  </label>
-                  {isOwner && (
+              {(adminControls || accessControl) && (
+                <div className="flex flex-wrap items-center gap-3">
+                  {adminControls && !m.limited && (
+                    <>
+                      <label className="flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-gray-600">
+                        <input type="checkbox" checked={m.treasurer} disabled={pending} onChange={e => run(() => setMemberTreasurer(m.userId, e.target.checked))} className="h-4 w-4 accent-brand-400" />
+                        Treasurer
+                      </label>
+                      <label className="flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-gray-600" title="Can approve merch takings into Finance">
+                        <input type="checkbox" checked={m.merchManager} disabled={pending} onChange={e => run(() => setMemberMerchManager(m.userId, e.target.checked))} className="h-4 w-4 accent-brand-400" />
+                        Merch
+                      </label>
+                    </>
+                  )}
+                  {adminControls && isOwner && (
                     <Select
                       value={m.role}
                       disabled={pending}
@@ -147,25 +118,22 @@ export function MembersSettings({ workspaceName, members, isAdmin, isOwner, acti
                       <option value="admin">Admin</option>
                     </Select>
                   )}
-                  {m.role === 'member' && (
+                  {accessControl && (
+                    <Link href={`/settings/members/${m.userId}`} className={chip}>
+                      <KeyRound className="h-3.5 w-3.5" /> Access
+                    </Link>
+                  )}
+                  {adminControls && (
                     <button
                       type="button"
                       disabled={pending}
-                      onClick={() => setAccessFor(m)}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 px-2.5 py-1.5 text-xs font-bold text-gray-700 hover:bg-brand-50"
+                      aria-label={`Remove ${m.name}`}
+                      onClick={() => { if (window.confirm(`Remove ${m.name} from ${workspaceName}?`)) run(() => removeMember(m.userId)) }}
+                      className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
                     >
-                      <KeyRound className="h-3.5 w-3.5" /> Access
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   )}
-                  <button
-                    type="button"
-                    disabled={pending}
-                    aria-label={`Remove ${m.name}`}
-                    onClick={() => { if (window.confirm(`Remove ${m.name} from ${workspaceName}?`)) run(() => removeMember(m.userId)) }}
-                    className={cn('rounded-lg p-2 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600')}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
                 </div>
               )}
             </li>
@@ -183,21 +151,6 @@ export function MembersSettings({ workspaceName, members, isAdmin, isOwner, acti
       {groupsFor && (
         <MemberGroupsSheet key={groupsFor.userId} person={{ userId: groupsFor.userId, name: groupsFor.name, avatarUrl: groupsFor.avatarUrl }}
           groups={groups} people={people} open onOpenChange={o => { if (!o) setGroupsFor(null) }} />
-      )}
-      {guestFor?.guest && (
-        <GuestAccessDialog key={guestFor.userId} memberId={guestFor.userId} memberName={guestFor.name} guest={guestFor.guest}
-          setlists={setlists} today={today} open onOpenChange={o => { if (!o) setGuestFor(null) }} />
-      )}
-      {accessFor && (
-        <AccessDialog
-          key={accessFor.userId}
-          memberId={accessFor.userId}
-          memberName={accessFor.name}
-          initial={accessFor.sections}
-          offSections={offSections}
-          open
-          onOpenChange={o => { if (!o) setAccessFor(null) }}
-        />
       )}
     </div>
   )

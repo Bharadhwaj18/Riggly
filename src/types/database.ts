@@ -1163,6 +1163,42 @@ export type Database = {
         }
         Relationships: []
       }
+      access_grants: {
+        Row: {
+          id: string
+          workspace_id: string
+          user_id: string
+          section: string
+          item_id: string
+          level: 'view' | 'edit'
+          until: string | null
+          granted_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          workspace_id: string
+          user_id: string
+          section: string
+          item_id: string
+          level?: 'view' | 'edit'
+          until?: string | null
+          granted_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          workspace_id?: string
+          user_id?: string
+          section?: string
+          item_id?: string
+          level?: 'view' | 'edit'
+          until?: string | null
+          granted_by?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       budgets: {
         Row: {
           workspace_id: string | null
@@ -2263,9 +2299,11 @@ export type Database = {
       accept_workspace_invite: { Args: { p_token: string }; Returns: string }
       join_with_invite: { Args: { p_token: string }; Returns: string }
       invite_sections: { Args: { p_token: string }; Returns: Json }
-      invite_setlist_guest: { Args: { p_token: string }; Returns: Json }
-      setlist_guest_state: { Args: { ws: string }; Returns: string }
-      guest_setlist_ids: { Args: { ws: string }; Returns: string[] }
+      invite_access: { Args: { p_token: string }; Returns: Json }
+      set_member_access: {
+        Args: { p_ws: string; p_user: string; p_sections: Json; p_access_until: string | null; p_grants: Json; p_access_manager?: boolean | null }
+        Returns: undefined
+      }
       invite_preview: {
         Args: { p_token: string }
         Returns: {

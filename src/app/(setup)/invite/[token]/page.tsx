@@ -7,8 +7,8 @@ import { AcceptInviteButton } from '@/components/workspace/AcceptInviteButton'
 import { BrandMark } from '@/components/ui/BrandMark'
 import { Wordmark } from '@/components/ui/Wordmark'
 import { WorkspaceAvatar } from '@/components/ui/WorkspaceAvatar'
-import { SECTIONS, sectionLevelsFrom } from '@/lib/workspace-sections'
-import { formatGuestDate } from '@/lib/setlist-guest'
+import { SECTIONS } from '@/lib/workspace-sections'
+import { formatDay, scopesFrom } from '@/lib/access'
 
 const STATE_MESSAGES: Record<string, string> = {
   revoked: 'This invite link was cancelled. Ask whoever invited you for a new one.',
@@ -25,22 +25,28 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
   const supabase = await createClient()
   const { data } = await supabase.rpc('invite_preview', { p_token: token })
   const invite = data?.[0]
-  // What a member joining with this link can open (null = everything, or the function isn't set up yet).
-  const { data: rawSections } = await supabase.rpc('invite_sections', { p_token: token })
-  const { data: crewInvite } = await supabase.rpc('invite_crew', { p_token: token })
-  // A setlist-guest link: which setlists, and until when (null for other links, or before its SQL has been run).
-  const { data: guestRaw } = await supabase.rpc('invite_setlist_guest', { p_token: token })
-  const guestObj = guestRaw && typeof guestRaw === 'object' && !Array.isArray(guestRaw) ? (guestRaw as Record<string, unknown>) : null
-  const guest = guestObj ? {
-    titles: Array.isArray(guestObj.titles) ? guestObj.titles.filter((t): t is string => typeof t === 'string') : [],
-    until: typeof guestObj.access_until === 'string' ? guestObj.access_until : null,
-  } : null
-  const levels = rawSections && typeof rawSections === 'object' && !Array.isArray(rawSections) ? sectionLevelsFrom({ sections: rawSections }, 'member') : null
+  // What a member joining with this link can open: whole sections, and items shared through the link.
+  // (null = everything, an admin link, or the function isn't set up yet; then fall back to the older checks.)
+  const { data: accessRaw } = await supabase.rpc('invite_access', { p_token: token })
+  const access = accessRaw && typeof accessRaw === 'object' && !Array.isArray(accessRaw) ? (accessRaw as Record<string, unknown>) : null
+  let levels = access ? scopesFrom({ sections: access.sections }, 'member') : null
+  if (!access) {
+    const { data: rawSections } = await supabase.rpc('invite_sections', { p_token: token })
+    const { data: crewInvite } = await supabase.rpc('invite_crew', { p_token: token })
+    if (rawSections && typeof rawSections === 'object' && !Array.isArray(rawSections)) levels = scopesFrom({ sections: rawSections, merch_crew: crewInvite === true }, 'member')
+  }
+  const sharedItems = access && Array.isArray(access.items) ? (access.items as { section?: string; title?: string }[]) : []
+  const accessUntil = access && typeof access.access_until === 'string' ? access.access_until : null
   const canOpen = levels
-    ? [
-        ...(crewInvite ? ['Merch (only the show kits you’re put on)'] : []),
-        ...SECTIONS.filter(sec => !(crewInvite && sec.key === 'merch') && levels[sec.key] !== 'none').map(sec => (levels[sec.key] === 'view' ? sec.label + ' (view only)' : sec.label)),
-      ]
+    ? SECTIONS.filter(sec => levels[sec.key] !== 'none').map(sec => {
+        const level = levels[sec.key]
+        if (level === 'items') {
+          const titles = sharedItems.filter(i => i.section === sec.key && i.title).map(i => i.title)
+          if (sec.key === 'merch' && titles.length === 0) return 'Merch (only the show kits you’re put on)'
+          return `${sec.label}: ${titles.length ? titles.join(', ') : `only what’s shared with you`} (view only)`
+        }
+        return level === 'view' ? sec.label + ' (view only)' : sec.label
+      })
     : null
   const { data: { user } } = await getCachedUser()
   const loginHref = `/login?next=${encodeURIComponent(`/invite/${token}`)}`
@@ -78,18 +84,18 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
               <p className="mt-1 text-sm text-gray-500">{invite.member_count} {invite.member_count === 1 ? 'member' : 'members'} already in</p>
             )}
             <span className="mt-4 inline-flex rounded-full bg-brand-100 px-3 py-1 text-xs font-bold text-brand-700">
-              You’ll join as {invite.invite_role === 'admin' ? 'an Admin' : guest ? 'a guest' : 'a Member'}
+              You’ll join as {invite.invite_role === 'admin' ? 'an Admin' : 'a Member'}
             </span>
-            {guest ? (
-              <p className="mt-3 text-sm text-gray-600">
-                You’ll be able to see {guest.titles.length === 1 ? 'the setlist' : 'these setlists'}, with their songs and chords:{' '}
-                <span className="font-semibold text-gray-800">{guest.titles.join(', ') || 'none yet'}</span>.
-                {guest.until && <> You can look until the end of {formatGuestDate(guest.until)}.</>}
-              </p>
-            ) : canOpen && (
-              <p className="mt-3 text-sm text-gray-600">
-                {canOpen.length === 0 ? 'An admin will choose what you can open after you join.' : <>You’ll be able to open: <span className="font-semibold text-gray-800">{canOpen.join(', ')}</span></>}
-              </p>
+            {canOpen && (
+              <div className="mt-3 text-sm text-gray-600">
+                {canOpen.length === 0 ? <p>An admin will choose what you can open after you join.</p> : (
+                  <>
+                    <p>You’ll be able to open:</p>
+                    <ul className="mt-1 space-y-0.5 font-semibold text-gray-800">{canOpen.map(line => <li key={line}>{line}</li>)}</ul>
+                  </>
+                )}
+                {accessUntil && <p className="mt-2">Until the end of {formatDay(accessUntil)}.</p>}
+              </div>
             )}
 
             {user ? (

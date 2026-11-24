@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { GuestEnded } from '@/components/layout/GuestEnded'
+import { AccessEnded } from '@/components/layout/AccessEnded'
 import { ArrowRight, CalendarDays, ListMusic, Music2, Plus } from 'lucide-react'
 import {
   getCachedShows, getCachedSetlistsByShow, getCachedSetlistSongCounts, getCachedTaskData,
@@ -12,7 +12,7 @@ import { daysUntil } from '@/lib/dates'
 import { compareOpenTasks } from '@/lib/tasks'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/server'
-import { getWorkspaceContext } from '@/lib/workspace'
+import { focusedShare, getWorkspaceContext } from '@/lib/workspace'
 import { hiddenSectionsOf, type SectionKey } from '@/lib/workspace-sections'
 import { infoCards, SectionTag } from '@/components/today/InfoWidgets'
 import { QuickAccess } from '@/components/today/QuickAccess'
@@ -38,13 +38,12 @@ const chipCls = 'transition-lift inline-flex shrink-0 items-center gap-2 rounded
 const card = 'flex h-full flex-col gap-3 rounded-2xl border border-brand-200 bg-white p-5 shadow-sm'
 
 export default async function TodayPage() {
-  // Setlist guests only have their setlists: straight there (or into the one setlist), or a note once access has ended.
-  const guestCtx = await getWorkspaceContext()
-  const guest = guestCtx?.current.guest
-  if (guestCtx && guest) {
-    if (guest.ended) return <GuestEnded workspaceName={guestCtx.current.workspace.name} accessUntil={guest.accessUntil} />
-    redirect(guest.setlistIds.length === 1 ? `/setlists/${guest.setlistIds[0]}` : '/setlists')
-  }
+  // Past their last day: a note instead of Today. Someone with nothing open but a few shared items of one
+  // feature goes straight to them (into the item itself when there's just one).
+  const accessCtx = await getWorkspaceContext()
+  if (accessCtx?.current.accessEnded) return <AccessEnded workspaceName={accessCtx.current.workspace.name} accessUntil={accessCtx.current.accessUntil} />
+  const onlyShared = accessCtx ? focusedShare(accessCtx.current) : null
+  if (onlyShared) redirect(onlyShared)
   const [shows, setlistsByShow, songCounts, taskData, pending, profiles, { data: { user } }, workspaceCtx] = await Promise.all([
     getCachedShows(),
     getCachedSetlistsByShow(),

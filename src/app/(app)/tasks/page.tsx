@@ -51,7 +51,9 @@ export default async function TasksPage({ searchParams }: Props) {
       avatars={avatars}
       today={todayISO()}
       currentUserId={user?.id}
-      readOnly={ctx?.current.sections.tasks === 'view'}
+      // View only, or only shared lists none of which they can edit. (Shared lists they can edit stay editable; the
+      // database keeps the rest read-only.)
+      readOnly={!ctx || ctx.current.sections.tasks === 'view' || (ctx.current.sections.tasks === 'items' && !(ctx.current.grants ?? []).some(g => g.section === 'tasks' && g.level === 'edit'))}
       // Tasks opens on your own; Everyone is a tap away. Old Board and Everyone links still land somewhere sensible.
       everyone={who === 'all' || (view === 'list' && mine !== '1') || view === 'kanban'}
       listId={list ?? group}

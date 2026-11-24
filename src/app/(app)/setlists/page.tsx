@@ -6,7 +6,7 @@ import { getWorkspaceContext } from '@/lib/workspace'
 import { ScopeToggle } from '@/components/layout/ScopeToggle'
 import { PersonalShows } from '@/components/shows/PersonalShows'
 import { todayISO } from '@/lib/shows'
-import { formatGuestDate } from '@/lib/setlist-guest'
+import { formatDay } from '@/lib/access'
 import { SetlistsBrowser, type PreviewSong } from '@/components/setlists/SetlistsBrowser'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -47,7 +47,9 @@ export default async function SetlistsPage({ searchParams }: { searchParams: Pro
   const upcomingCount = setlists.filter(s => s.show_date && s.show_date >= today).length
 
   const canEdit = wsCtx?.current.sections.setlists === 'edit'
-  const guest = wsCtx?.current.guest
+  // Only some setlists shared with them.
+  const sharedOnly = wsCtx?.current.sections.setlists === 'items'
+  const until = wsCtx?.current.accessUntil
   const newButton = canEdit ? (
     <Button asChild>
       <Link href="/setlists/new">
@@ -60,8 +62,8 @@ export default async function SetlistsPage({ searchParams }: { searchParams: Pro
     <div>
       <PageHeader
         title="Setlists"
-        subtitle={guest
-          ? `Shared with you, view only${guest.accessUntil ? ` · until ${formatGuestDate(guest.accessUntil)}` : ''}`
+        subtitle={sharedOnly
+          ? `${setlists.length} shared with you${until ? ` · until ${formatDay(until)}` : ''}`
           : `${setlists.length} ${setlists.length === 1 ? 'setlist' : 'setlists'}${upcomingCount ? ` · ${upcomingCount} for upcoming shows` : ''}`}
         action={newButton}
       />
@@ -69,8 +71,8 @@ export default async function SetlistsPage({ searchParams }: { searchParams: Pro
       {!setlists.length ? (
         <EmptyState
           icon={<ListMusic className="h-12 w-12" />}
-          title={guest ? 'No setlists shared with you yet' : 'No setlists yet'}
-          description={canEdit ? 'Create a setlist for your next event' : guest ? 'Ask whoever invited you to share one.' : 'Nothing to see here yet.'}
+          title={sharedOnly ? 'No setlists shared with you yet' : 'No setlists yet'}
+          description={canEdit ? 'Create a setlist for your next event' : sharedOnly ? 'Ask an admin to share one with you.' : 'Nothing to see here yet.'}
           action={newButton}
         />
       ) : (

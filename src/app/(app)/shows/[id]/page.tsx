@@ -18,6 +18,7 @@ import { computeTds } from '@/lib/finance/tds'
 import { todayISO } from '@/lib/shows'
 import { countdownLabel } from '@/lib/dates'
 import { cn } from '@/lib/utils'
+import { canEditItem } from '@/lib/access'
 import { getWorkspaceContext, isFinanceApprover, isMerchApprover } from '@/lib/workspace'
 import { MarkSplitButton } from '@/components/shows/MarkSplitButton'
 import { KIT_STATUS_LABELS, saleTakings, type KitStatus } from '@/lib/merch'
@@ -86,6 +87,9 @@ export default async function ShowDetailPage({ params }: Props) {
 
   // Merch at this show: what sold, what was given away, and how much of the money is approved into Finance.
   const merchLevel = ctx?.current.sections.merch ?? 'none'
+  // Whole-section edit, or this show shared with them to edit. Deleting needs whole-section edit.
+  const canEditShow = !!ctx && canEditItem(ctx.current.sections.shows, ctx.current.grants ?? [], 'shows', id)
+  const canDeleteShow = ctx?.current.sections.shows === 'edit'
   const canPackKit = !!ctx && isMerchApprover(ctx.current)
   const merchSold = (merchMoves ?? []).filter(m => m.reason === 'sale').reduce((n, m) => n - m.qty, 0)
   const merchGiven = (merchMoves ?? []).filter(m => m.reason === 'giveaway').reduce((n, m) => n - m.qty, 0)
@@ -126,7 +130,7 @@ export default async function ShowDetailPage({ params }: Props) {
               </p>
             )}
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              <ShowStatusMenu key={show.booking_status ?? 'none'} showId={id} status={show.booking_status} canEdit={ctx?.current.sections.shows === 'edit'} showNext />
+              <ShowStatusMenu key={show.booking_status ?? 'none'} showId={id} status={show.booking_status} canEdit={canEditShow} showNext />
               {show.format && <StatusPill tone="gray">{show.format}</StatusPill>}
               <StatusPill tone={isSplit ? 'green' : 'amber'}>{isSplit ? 'Split' : 'Unsplit'}</StatusPill>
               {show.media_url && (
@@ -138,10 +142,12 @@ export default async function ShowDetailPage({ params }: Props) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" asChild>
-            <Link href={`/shows/${id}/edit`}><Pencil className="h-4 w-4" /> Edit</Link>
-          </Button>
-          <DeleteShowButton id={id} />
+          {canEditShow && (
+            <Button variant="secondary" size="sm" asChild>
+              <Link href={`/shows/${id}/edit`}><Pencil className="h-4 w-4" /> Edit</Link>
+            </Button>
+          )}
+          {canDeleteShow && <DeleteShowButton id={id} />}
         </div>
       </div>
 

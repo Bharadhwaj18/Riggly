@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { ChevronLeft, Pencil, Calendar, MapPin, Link2, Play } from 'lucide-react'
 import { getCachedSetlist, getCachedSetlistSongs, getCachedSongs, getCachedAllProfiles, getCachedUser, getCachedShow, getCachedShowTypes, getCachedSetlistSongCounts } from '@/lib/data'
 import { getWorkspaceContext } from '@/lib/workspace'
+import { canEditItem } from '@/lib/access'
 import { tagCounts } from '@/lib/song-tags'
 import { SuggestedSongs } from '@/components/setlists/SuggestedSongs'
 import { SetlistSongList } from '@/components/setlists/SetlistSongList'
@@ -27,7 +28,7 @@ interface Props {
 const AVG_SONG_MINUTES = 4.5
 
 export default async function SetlistPage({ params }: Props) {
-  const denied = await sectionGuard('setlists')
+  const denied = await sectionGuard('setlists', ['shows'])
   if (denied) return denied
   const { id } = await params
 
@@ -74,9 +75,10 @@ export default async function SetlistPage({ params }: Props) {
   const estimatedMinutes = Math.round(songCount * AVG_SONG_MINUTES)
   const songsWithoutChart = setlistSongs.filter(ss => !ss.song.chord_chart?.trim()).map(ss => ss.song.title)
   const firstSong = setlistSongs[0]?.song
-  // View-only members (and setlist guests) just look: no editing, adding, reordering or deleting.
-  const canEdit = ctx?.current.sections.setlists === 'edit'
-  const isGuest = !!ctx?.current.guest
+  // Whole-section edit, or this setlist shared with them to edit. Everyone else just looks.
+  const canEdit = !!ctx && canEditItem(ctx.current.sections.setlists, ctx.current.grants ?? [], 'setlists', id)
+  // Only some setlists shared with them: keep the band's own details (who made it, show links) out of view.
+  const sharedOnly = ctx?.current.sections.setlists !== 'edit' && ctx?.current.sections.setlists !== 'view'
 
   return (
     <div>
@@ -93,7 +95,7 @@ export default async function SetlistPage({ params }: Props) {
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-gray-500">
             {date && <span className="flex items-center gap-1.5"><Calendar className="h-4 w-4" />{date}</span>}
             {setlist.venue && <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4" />{setlist.venue}</span>}
-            {linkedShow && !isGuest && (
+            {linkedShow && (
               <Link href={`/shows/${linkedShow.id}`} className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800 hover:opacity-80">
                 <Link2 className="h-3.5 w-3.5" /> {linkedShow.title} →
               </Link>
@@ -112,7 +114,7 @@ export default async function SetlistPage({ params }: Props) {
               <Button variant="secondary" asChild>
                 <Link href={`/setlists/${id}/edit`}><Pencil className="h-4 w-4" /> Edit details</Link>
               </Button>
-              <DeleteSetlistButton id={id} />
+              {ctx?.current.sections.setlists === 'edit' && <DeleteSetlistButton id={id} />}
             </>
           )}
         </div>
@@ -191,7 +193,7 @@ export default async function SetlistPage({ params }: Props) {
             </div>
           )}
 
-          {!isGuest && <div className="rounded-2xl border border-brand-200 bg-white p-5 shadow-sm">
+          {!sharedOnly && <div className="rounded-2xl border border-brand-200 bg-white p-5 shadow-sm">
             <SectionLabel>Details</SectionLabel>
             <dl className="mt-3 space-y-2 text-sm">
               <div className="flex justify-between gap-3"><dt className="text-gray-500">Songs</dt><dd className="font-bold text-gray-900">{songCount}</dd></div>

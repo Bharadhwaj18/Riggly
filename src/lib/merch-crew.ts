@@ -1,15 +1,17 @@
+import { isLimitedMember } from '@/lib/access'
+
 /**
- * Merch crew (not owners or admins) only belong in Merch: they're left out of the band's member lists, pickers and
- * band-wide notifications everywhere else.
+ * Merch crew (not owners or admins): Merch set to 'only these items' (their kits), or the old merch_crew flag.
  */
-export const isMerchCrewRow = (m: { role: string; permissions: unknown }) =>
-  m.role !== 'owner' && m.role !== 'admin' && !!m.permissions && typeof m.permissions === 'object' && !Array.isArray(m.permissions) &&
-  (m.permissions as Record<string, unknown>).merch_crew === true
+export const isMerchCrewRow = (m: { role: string; permissions: unknown }) => {
+  if (m.role === 'owner' || m.role === 'admin' || !m.permissions || typeof m.permissions !== 'object' || Array.isArray(m.permissions)) return false
+  const p = m.permissions as Record<string, unknown>
+  const sections = p.sections && typeof p.sections === 'object' && !Array.isArray(p.sections) ? (p.sections as Record<string, unknown>) : {}
+  return p.merch_crew === true || sections.merch === 'items'
+}
 
-/** Setlist guests: only ever see the setlists picked for them. */
-export const isSetlistGuestMember = (m: { role: string; permissions: unknown }) =>
-  m.role !== 'owner' && m.role !== 'admin' && !!m.permissions && typeof m.permissions === 'object' && !Array.isArray(m.permissions) &&
-  (m.permissions as Record<string, unknown>).setlist_guest === true
-
-/** People outside the band (Merch crew, setlist guests): left out of member lists, pickers and band-wide notifications. */
-export const isOutsiderRow = (m: { role: string; permissions: unknown }) => isMerchCrewRow(m) || isSetlistGuestMember(m)
+/**
+ * People outside the band's day-to-day (no whole feature open to them, e.g. Merch crew or someone with only a few
+ * setlists): left out of member lists, pickers and band-wide notifications.
+ */
+export const isOutsiderRow = (m: { role: string; permissions: unknown }) => isLimitedMember(m)

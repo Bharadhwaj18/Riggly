@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight, Pencil } from 'lucide-react'
 import { getCachedSong, getCachedSetlist, getCachedAllProfiles, getCachedSetlistSongs, getCachedUser, getCachedRecordings, getCachedSongs, getCachedSongReferences, getCachedWorkspaceGroups, getCachedSongGroupNotes } from '@/lib/data'
 import { SongViews, type NoteView } from '@/components/groups/SongViews'
 import { getWorkspaceContext } from '@/lib/workspace'
+import { canEditItem } from '@/lib/access'
 import { toPlayable, type PlayableReference } from '@/lib/song-references'
 import { SongReferences } from '@/components/references/SongReferences'
 import { Cover } from '@/components/references/Cover'
@@ -30,7 +31,7 @@ interface Props {
 }
 
 export default async function SongPage({ params, searchParams }: Props) {
-  const denied = await sectionGuard('songs')
+  const denied = await sectionGuard('songs', ['setlists', 'shows'])
   if (denied) return denied
   const { id } = await params
   const { from, stage } = await searchParams
@@ -63,7 +64,7 @@ export default async function SongPage({ params, searchParams }: Props) {
   if (!song) notFound()
 
   const references = referenceRows.map(toPlayable).filter((r): r is PlayableReference => !!r)
-  const canEditSongs = ctx?.current.sections.songs !== 'view'
+  const canEditSongs = !!ctx && canEditItem(ctx.current.sections.songs, ctx.current.grants ?? [], 'songs', id)
   // The reference the cover art came from, linked under the title (Spotify requires a link back for its artwork).
   const coverFrom = song.cover_url ? references.find(r => r.thumbnailUrl === song.cover_url) : undefined
 
