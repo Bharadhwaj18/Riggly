@@ -86,12 +86,16 @@ export const getSettingsMembers = cache(async (): Promise<MemberRow[]> => {
   })
 })
 
-/** One member's access, for their Access page. Null when it isn't yours to change. */
+/**
+ * One member's page: who they are and what they can open. Admins can open anyone but the owner; Access managers
+ * only members. Null when it isn't yours to change (or it's you).
+ */
 export const getMemberAccess = cache(async (userId: string): Promise<{ member: MemberRow; grants: AccessGrant[] } | null> => {
   const s = await getSettingsContext()
   if (!s.canManageAccess || s.isPersonal || userId === s.userId) return null
   const member = (await getSettingsMembers()).find(m => m.userId === userId)
-  if (!member || member.role === 'owner' || member.role === 'admin') return null
+  if (!member || member.role === 'owner' || (member.role === 'admin' && !s.isAdmin)) return null
+  if (member.role === 'admin') return { member, grants: [] }
   const supabase = await createClient()
   const { data } = await supabase.from('access_grants').select('section, item_id, level, until').eq('workspace_id', s.workspace.id).eq('user_id', userId)
   return { member, grants: grantsFromRows(data ?? []) }
