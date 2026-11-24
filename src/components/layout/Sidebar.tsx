@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { BrandMark } from '@/components/ui/BrandMark'
 import { Wordmark } from '@/components/ui/Wordmark'
 import { usePathname, useRouter } from 'next/navigation'
-import { Music2, ListMusic, Wallet, Shirt, LogOut, CalendarDays, CalendarRange, StickyNote, SquareKanban, Building2, Settings, Mic, LayoutDashboard } from 'lucide-react'
+import { Music2, ListMusic, Wallet, Shirt, LogOut, CalendarDays, CalendarRange, StickyNote, ListChecks, Building2, Settings, Mic, LayoutDashboard } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import { ACTIVE_SETLIST_COOKIE } from '@/lib/setlist-context'
@@ -46,7 +46,7 @@ const navGroups = [
   {
     label: 'Organise',
     items: [
-      { href: '/tasks', label: 'Tasks', icon: SquareKanban },
+      { href: '/tasks', label: 'Tasks', icon: ListChecks },
       { href: '/notes', label: 'Notes', icon: StickyNote },
       { href: '/calendar', label: 'Calendar', icon: CalendarRange },
       { href: '/event-management', label: 'Agencies', icon: Building2 },

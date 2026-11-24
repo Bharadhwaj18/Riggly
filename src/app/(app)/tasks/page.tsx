@@ -10,19 +10,19 @@ import { buildPeople } from '@/lib/tasks'
 import { TasksView } from '@/components/tasks/list/TasksView'
 
 interface Props {
-  searchParams: Promise<{ view?: string; group?: string; task?: string; mine?: string; scope?: string }>
+  searchParams: Promise<{ view?: string; group?: string; list?: string; who?: string; task?: string; mine?: string; scope?: string }>
 }
 
-/** Tasks: one list across every group (edit right in it), or one group's Kanban. */
+/** Tasks: one list, yours or everyone's, all lists or one, by when it's due. */
 export default async function TasksPage({ searchParams }: Props) {
   const denied = await sectionGuard('tasks')
   if (denied) return denied
-  const { view, group, task, mine, scope } = await searchParams
+  const { view, group, list, who, task, mine, scope } = await searchParams
   // Your Personal space opens on your tasks from every workspace, unless you pick "This one".
   const wsCtx = await getWorkspaceContext()
   const canScope = wsCtx?.current.workspace.type === 'personal' && wsCtx.memberships.length > 1
-  // Any List/Kanban link counts as "This one", so switching views doesn't jump back to All.
-  const thisOne = scope === 'this' || !!view || !!group || !!mine || !!task
+  // Any link into a list, a person's view or a task counts as "This one", so it doesn't jump back to All.
+  const thisOne = scope === 'this' || !!view || !!group || !!list || !!who || !!mine || !!task
   if (wsCtx && canScope && !thisOne) {
     const today = todayISO()
     return (
@@ -39,7 +39,7 @@ export default async function TasksPage({ searchParams }: Props) {
 
   return (
     <TasksView
-      key={view === 'kanban' ? `kanban:${group ?? ''}` : view === 'list' ? 'list' : 'mine'}
+      key={`${who ?? ''}:${list ?? group ?? ''}`}
       boards={data.boards}
       buckets={data.buckets}
       tasks={data.tasks}
@@ -50,9 +50,9 @@ export default async function TasksPage({ searchParams }: Props) {
       today={todayISO()}
       currentUserId={user?.id}
       readOnly={ctx?.current.sections.tasks === 'view'}
-      // Tasks opens on your own; Everyone and Board are a tap away.
-      view={view === 'kanban' ? 'kanban' : view === 'list' && mine !== '1' ? 'list' : 'mine'}
-      kanbanGroupId={group}
+      // Tasks opens on your own; Everyone is a tap away. Old Board and Everyone links still land somewhere sensible.
+      everyone={who === 'all' || (view === 'list' && mine !== '1') || view === 'kanban'}
+      listId={list ?? group}
       openTaskId={task}
       scopeToggle={canScope ? <ScopeToggle all={false} thisHref="/tasks?scope=this" allHref="/tasks" /> : undefined}
     />

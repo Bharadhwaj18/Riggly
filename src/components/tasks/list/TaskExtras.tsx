@@ -10,7 +10,7 @@ import type { Task } from '@/types/tasks'
 import type { CellContext } from './cells'
 
 /** Notes, checklist and delete for one task. `stacked`: one column, for a narrow panel. */
-export function TaskExtras({ task, c, stacked = false }: { task: Task; c: CellContext; stacked?: boolean }) {
+export function TaskExtras({ task, c, stacked = false, hideDelete = false }: { task: Task; c: CellContext; stacked?: boolean; hideDelete?: boolean }) {
   const router = useRouter()
   const toast = useToast()
   const [notes, setNotes] = useState(task.description ?? '')
@@ -71,7 +71,7 @@ export function TaskExtras({ task, c, stacked = false }: { task: Task; c: CellCo
               className="min-h-9 flex-1 rounded-lg bg-transparent px-1 text-sm text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-400" />
           </form>
         )}
-        {!c.readOnly && (
+        {!c.readOnly && !hideDelete && (
           <button type="button" onClick={remove} disabled={pending} className="mt-3 inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-bold text-red-700 hover:bg-red-50 disabled:opacity-50">
             <Trash2 className="h-3.5 w-3.5" /> Delete task
           </button>

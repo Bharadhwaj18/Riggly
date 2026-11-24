@@ -125,9 +125,9 @@ export const TOURS: Tour[] = [
     blurb: 'Who’s doing what, by when.',
     startPath: '/tasks',
     steps: [
-      { path: '^/tasks$', target: ['[role="tablist"][aria-label="View"]'], title: 'List or board', body: 'See tasks as a list, or as a board with columns like To do, Doing and Done.' },
-      { path: '^/tasks$', target: ['input[aria-label="Search tasks"]'], title: 'Find and filter', body: 'Search, or filter by who it’s assigned to.' },
-      { path: '^/tasks$', target: ['[data-tour="task-add"]'], title: 'Add a task', brief: true, body: 'Type it, press Enter. Then give it a due date and people. They see it on their Today.' },
+      { path: '^/tasks$', target: ['[data-tour="task-add"]'], title: 'Add a task', brief: true, body: 'Type it, tap Today or a date and who’s doing it, and press Enter. They see it on their Today.' },
+      { path: '^/tasks$', target: ['[data-tour="task-filters"]'], title: 'Yours or everyone’s', body: 'Mine shows what’s yours, Everyone shows the whole band. Tap a list, like a show, to see just its tasks.' },
+      { path: '^/tasks$', title: 'Tick it off', body: 'Tap the circle when it’s done. Tap a task to add notes, a checklist, or star it as important.' },
     ],
   },
 ]

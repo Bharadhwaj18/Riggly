@@ -6,7 +6,7 @@ import { requireWorkspaceId } from '@/lib/workspace'
 import { sendNotification } from '@/actions/notifications'
 import { addDaysISO, addMonthsISO, daysUntil, formatDateDMY } from '@/lib/dates'
 import { boardNameSchema, labelInputSchema, taskInputSchema, type TaskInput } from '@/lib/validators'
-import { DEFAULT_BUCKETS, TASK_FIELD_TYPES, TASK_PRIORITIES, TASK_PROGRESS, type TaskFieldType, type TaskLabel, type TaskProgress, type TaskRecurrence } from '@/types/tasks'
+import { DEFAULT_BUCKETS, TASK_FIELD_TYPES, TASK_PRIORITIES, TASK_PROGRESS, TASK_RECURRENCE, type TaskFieldType, type TaskLabel, type TaskProgress, type TaskRecurrence } from '@/types/tasks'
 import type { Database, Json } from '@/types/database'
 
 type Supabase = Awaited<ReturnType<typeof createClient>>
@@ -447,6 +447,10 @@ export interface TaskPatch {
   checklist?: { id?: string; text: string; done: boolean }[]
   /** One custom column's value; null clears it. */
   custom?: { fieldId: string; value: string | number | boolean | null }
+  /** How it repeats once done; null stops it. Needs a date. */
+  recurrence?: TaskRecurrence | null
+  /** Days before the date to remind the people on it; null for no reminder. Needs a date. */
+  remindDaysBefore?: number | null
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
@@ -482,6 +486,18 @@ export async function patchTask(id: string, patch: TaskPatch): Promise<Result> {
     update[column] = v
   }
   if (patch.dueDate === null) { update.remind_days_before = null; update.recurrence = null }
+  const hasDate = patch.dueDate !== undefined ? patch.dueDate !== null : !!existing.due_date
+  if (patch.recurrence !== undefined) {
+    if (patch.recurrence !== null && !(TASK_RECURRENCE as readonly string[]).includes(patch.recurrence)) return { error: 'Invalid repeat' }
+    if (patch.recurrence !== null && !hasDate) return { error: 'Give the task a date first, so it knows when to repeat.' }
+    update.recurrence = patch.recurrence
+  }
+  if (patch.remindDaysBefore !== undefined) {
+    const r = patch.remindDaysBefore
+    if (r !== null && (!Number.isInteger(r) || r < 0 || r > 365)) return { error: 'Invalid reminder' }
+    if (r !== null && !hasDate) return { error: 'Give the task a date first, so it knows when to remind you.' }
+    update.remind_days_before = r
+  }
   if (patch.assigneeIds !== undefined) update.assignee_ids = [...new Set(patch.assigneeIds)]
   if (patch.description !== undefined) {
     const d = patch.description?.trim() ? patch.description : null

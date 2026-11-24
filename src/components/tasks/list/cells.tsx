@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { CheckSquare2, Circle, CircleDot, Square, UserPlus, X } from 'lucide-react'
+import { CheckSquare2, Circle, CircleCheck, CircleDot, Square, UserPlus, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { STATUS_TEXT } from '@/lib/task-view'
 import { UserAvatar } from '@/components/ui/UserAvatar'
@@ -54,12 +54,15 @@ export function recentTick(id: string) {
   return at !== undefined && Date.now() - at < TICK_WINDOW_MS
 }
 
+/** A task is starred (important) when its priority is Urgent or Important. */
+export const isStarred = (t: Pick<Task, 'priority'>) => t.priority === 'urgent' || t.priority === 'important'
+
 /** The tick on the left of every row: done or not. */
 export function DoneToggle({ task, c, size = 20 }: { task: Task; c: CellContext; size?: number }) {
   const done = task.progress === 'completed'
   // Only a fresh tick plays the pop and ring, so a finished list doesn't animate when it first loads.
   const [ticks, setTicks] = useState(() => (recentTick(task.id) ? 1 : 0))
-  const Icon = done ? CheckSquare2 : Square
+  const Icon = done ? CircleCheck : Circle
   return (
     <button type="button" disabled={c.readOnly} aria-label={done ? `Mark “${task.title}” not done` : `Mark “${task.title}” done`} aria-pressed={done}
       onClick={e => {
@@ -166,7 +169,7 @@ export function DateCell({ value, label, overdue, onChange, readOnly, compact }:
 export function GroupCell({ task, c }: { task: Task; c: CellContext }) {
   const board = c.boards.find(b => b.id === task.board_id)
   return (
-    <CellMenu label="Group" disabled={c.readOnly} trigger={<span className="truncate px-1 text-sm font-bold text-gray-800">{board?.name ?? 'Group'}</span>} value={task.board_id}
+    <CellMenu label="List" disabled={c.readOnly} trigger={<span className="truncate px-1 text-sm font-bold text-gray-800">{board?.name ?? 'List'}</span>} value={task.board_id}
       options={c.boards.map(b => ({ value: b.id, label: b.name }))}
       onChange={v => c.onPatch(task, { boardId: v })} />
   )

@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { sectionForHref, type SectionKey } from '@/lib/workspace-sections'
-import { Building2, CalendarDays, CalendarRange, Ellipsis, ListMusic, Mic, Music2, SquareKanban, StickyNote, type LucideIcon } from 'lucide-react'
+import { Building2, CalendarDays, CalendarRange, Ellipsis, ListMusic, Mic, Music2, ListChecks, StickyNote, type LucideIcon } from 'lucide-react'
 import { SectionLabel } from '@/components/ui/SectionLabel'
 
 export interface QuickCounts {
@@ -29,7 +29,7 @@ export function QuickAccess({ counts, variant, hiddenSections = [] }: { counts: 
       { href: '/shows', label: 'Shows', icon: CalendarDays },
       { href: '/songs', label: 'Songs', icon: Music2 },
       { href: '/recordings', label: 'Recordings', icon: Mic },
-      { href: '/tasks', label: 'Tasks', icon: SquareKanban },
+      { href: '/tasks', label: 'Tasks', icon: ListChecks },
       { href: '/notes', label: 'Notes', icon: StickyNote },
       { href: '/event-management', label: 'Agencies', icon: Building2 },
       { href: '/setlists', label: 'Setlists', icon: ListMusic },
@@ -55,7 +55,7 @@ export function QuickAccess({ counts, variant, hiddenSections = [] }: { counts: 
     { href: '/setlists', label: 'Setlists', icon: ListMusic, hint: counts.setlists === null ? undefined : plural(counts.setlists, 'setlist') },
     { href: '/songs', label: 'Songs', icon: Music2, hint: counts.songs === null ? undefined : plural(counts.songs, 'song') },
     { href: '/recordings', label: 'Recordings', icon: Mic, hint: counts.recordings === null ? undefined : plural(counts.recordings, 'recording') },
-    { href: '/tasks', label: 'Tasks', icon: SquareKanban, hint: `${counts.openTasks} open` },
+    { href: '/tasks', label: 'Tasks', icon: ListChecks, hint: `${counts.openTasks} open` },
     { href: '/notes', label: 'Notes', icon: StickyNote, hint: 'Jot things down' },
     { href: '/calendar', label: 'Calendar', icon: CalendarRange, hint: nextLabel(counts.nextShowDate) },
     { href: '/event-management', label: 'Agencies', icon: Building2, hint: 'Booking contacts' },
