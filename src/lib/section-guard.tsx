@@ -1,4 +1,5 @@
 import { NoAccess } from '@/components/layout/NoAccess'
+import { GuestEnded } from '@/components/layout/GuestEnded'
 import { getWorkspaceContext } from '@/lib/workspace'
 import { sectionLabelOf, type SectionKey } from '@/lib/workspace-sections'
 
@@ -9,5 +10,6 @@ import { sectionLabelOf, type SectionKey } from '@/lib/workspace-sections'
 export async function sectionGuard(key: SectionKey) {
   const ctx = await getWorkspaceContext()
   if (!ctx || ctx.current.sections[key] !== 'none') return null
+  if (ctx.current.guest?.ended) return <GuestEnded workspaceName={ctx.current.workspace.name} accessUntil={ctx.current.guest.accessUntil} />
   return <NoAccess section={sectionLabelOf(key)} workspaceName={ctx.current.workspace.name} />
 }

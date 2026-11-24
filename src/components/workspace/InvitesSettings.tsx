@@ -11,7 +11,11 @@ import { APP_NAME } from '@/lib/brand'
 import { cn } from '@/lib/utils'
 import { SECTIONS, type SectionKey, type SectionLevels } from '@/lib/workspace-sections'
 import { SectionAccessGrid, accessSummary, allSections } from './SectionAccessGrid'
-import type { InviteRow } from './settings-types'
+import type { InviteRow, SetlistOption } from './settings-types'
+import { GuestSetlistPicker, GuestUntilField } from './GuestSetlistPicker'
+import { ReasonButton } from '@/components/ui/ReasonButton'
+import { addDaysISO } from '@/lib/dates'
+import { formatGuestDate } from '@/lib/setlist-guest'
 import { Select } from '@/components/ui/Select'
 
 const fieldCls = 'mt-1 block w-full rounded-lg border border-brand-200 bg-white px-3 py-2 text-sm text-gray-900'
@@ -78,9 +82,18 @@ function crewSummary(levels: SectionLevels | null): string {
   return extra.length ? 'Own kits, also ' + extra.join(', ') : 'Own kits only'
 }
 
-export function InvitesSettings({ invites, workspaceName, offSections = [] }: { invites: InviteRow[]; workspaceName: string; offSections?: SectionKey[] }) {
+export function InvitesSettings({ invites, workspaceName, offSections = [], setlists = [], today }: {
+  invites: InviteRow[]; workspaceName: string; offSections?: SectionKey[]
+  /** For setlist guest links. */
+  setlists?: SetlistOption[]
+  /** 'YYYY-MM-DD' in India. */
+  today: string
+}) {
   const router = useRouter()
-  const [role, setRole] = useState<'member' | 'admin' | 'crew'>('member')
+  const [role, setRole] = useState<'member' | 'admin' | 'crew' | 'guest'>('member')
+  const [setlistIds, setSetlistIds] = useState<string[]>([])
+  const [until, setUntil] = useState(addDaysISO(today, 7))
+  const maxUntil = addDaysISO(today, 366)
   const [sections, setSections] = useState<SectionLevels>(allSections('edit'))
   const [days, setDays] = useState(7)
   const [maxUses, setMaxUses] = useState('')
@@ -103,7 +116,9 @@ export function InvitesSettings({ invites, workspaceName, offSections = [] }: { 
     setError(null)
     const parsedMax = maxUses.trim() ? Number(maxUses) : null
     startTransition(async () => {
-      const res = await createInvite({ role, expiresInDays: days, maxUses: parsedMax, sections: role !== 'admin' ? sections : undefined })
+      const res = await createInvite(role === 'guest'
+        ? { role, expiresInDays: days, maxUses: parsedMax, setlistIds, accessUntil: until }
+        : { role, expiresInDays: days, maxUses: parsedMax, sections: role !== 'admin' ? sections : undefined })
       if (res.error) { setError(res.error); return }
       if (res.token) setReadyToken(res.token)
       router.refresh()
@@ -133,10 +148,11 @@ export function InvitesSettings({ invites, workspaceName, offSections = [] }: { 
 
         <div>
           <p className={label}>1. They join as</p>
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-2">
             {([
               { value: 'member', title: 'Member', text: 'Opens only the sections you choose below.' },
               { value: 'crew', title: 'Merch crew', text: 'Sees only the merch kits they’re put on (nothing until then), plus any sections you tick.' },
+              { value: 'guest', title: 'Setlist guest', text: 'Sees only the setlists you pick, with their songs and chords. View only, until a date you choose.' },
               { value: 'admin', title: 'Admin', text: 'Everything, plus inviting people and changing settings.' },
             ] as const).map(o => (
               <button key={o.value} type="button" aria-pressed={role === o.value}
@@ -154,7 +170,22 @@ export function InvitesSettings({ invites, workspaceName, offSections = [] }: { 
           </div>
         </div>
 
-        {role !== 'admin' && (
+        {role === 'guest' && (
+          <>
+            <div>
+              <p className={label}>2. Which setlists they can see</p>
+              <p className="-mt-1 mb-2 text-xs text-gray-500">They’ll see each song in these setlists, with its chords, lyrics, key and notes. Nothing else in {workspaceName}. You can change this later in Members.</p>
+              <GuestSetlistPicker setlists={setlists} value={setlistIds} onChange={setSetlistIds} today={today} disabled={pending} />
+            </div>
+            <div>
+              <p className={label}>3. How long they can look</p>
+              <GuestUntilField value={until} onChange={setUntil} today={today} max={maxUntil} disabled={pending} />
+              {until && <p className="mt-1.5 text-xs text-gray-500">From {formatGuestDate(addDaysISO(until, 1))} they won’t see anything.</p>}
+            </div>
+          </>
+        )}
+
+        {role !== 'admin' && role !== 'guest' && (
           <div>
             <p className={label}>2. {role === 'crew' ? 'Anything else they can open' : 'What they can open'}</p>
             <p className="-mt-1 mb-2 text-xs text-gray-500">
@@ -167,7 +198,7 @@ export function InvitesSettings({ invites, workspaceName, offSections = [] }: { 
         )}
 
         <div>
-          <p className={label}>{role !== 'admin' ? '3.' : '2.'} How long the link works</p>
+          <p className={label}>{role === 'guest' ? '4.' : role !== 'admin' ? '3.' : '2.'} How long the link works</p>
           <div className="grid max-w-md grid-cols-2 gap-3">
             <label className="text-xs font-semibold text-gray-600">
               Expires in
@@ -182,7 +213,10 @@ export function InvitesSettings({ invites, workspaceName, offSections = [] }: { 
           </div>
         </div>
 
-        <Button onClick={create} loading={pending}><Link2 className="h-4 w-4" /> Create invite link</Button>
+        <ReasonButton onClick={create} loading={pending}
+          blocked={role === 'guest' && (setlistIds.length === 0 ? 'Pick at least one setlist first.' : !until ? 'Pick the last day they can look.' : until < today ? 'The last day can’t be in the past.' : null)}>
+          <Link2 className="h-4 w-4" /> Create invite link
+        </ReasonButton>
       </section>
 
       <section className="space-y-2">
@@ -195,8 +229,11 @@ export function InvitesSettings({ invites, workspaceName, offSections = [] }: { 
               <li key={i.id} className="animate-row-in flex items-center gap-3 px-4 py-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
-                    <StatusPill tone={i.role === 'admin' ? 'amber' : 'gray'}>{i.role === 'admin' ? 'Admin' : i.crew ? 'Merch crew' : 'Member'}</StatusPill>
-                    <span className="font-semibold text-gray-700">{i.crew ? crewSummary(i.sections) : i.role !== 'admin' && i.sections ? accessSummary(i.sections) : 'Everything'}</span>
+                    <StatusPill tone={i.role === 'admin' ? 'amber' : 'gray'}>{i.role === 'admin' ? 'Admin' : i.guest ? 'Setlist guest' : i.crew ? 'Merch crew' : 'Member'}</StatusPill>
+                    <span className="font-semibold text-gray-700">
+                      {i.guest ? `${i.guest.count} ${i.guest.count === 1 ? 'setlist' : 'setlists'}${i.guest.accessUntil ? `, until ${formatGuestDate(i.guest.accessUntil)}` : ''}`
+                        : i.crew ? crewSummary(i.sections) : i.role !== 'admin' && i.sections ? accessSummary(i.sections) : 'Everything'}
+                    </span>
                   </div>
                   <p className="mt-1 text-xs text-gray-500">{i.useCount}{i.maxUses ? ` of ${i.maxUses}` : ''} joined · expires {formatDate(i.expiresAt)}</p>
                 </div>

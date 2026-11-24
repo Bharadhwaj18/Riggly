@@ -1,4 +1,6 @@
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
+import { GuestEnded } from '@/components/layout/GuestEnded'
 import { ArrowRight, CalendarDays, ListMusic, Music2, Plus } from 'lucide-react'
 import {
   getCachedShows, getCachedSetlistsByShow, getCachedSetlistSongCounts, getCachedTaskData,
@@ -36,6 +38,13 @@ const chipCls = 'transition-lift inline-flex shrink-0 items-center gap-2 rounded
 const card = 'flex h-full flex-col gap-3 rounded-2xl border border-brand-200 bg-white p-5 shadow-sm'
 
 export default async function TodayPage() {
+  // Setlist guests only have their setlists: straight there (or into the one setlist), or a note once access has ended.
+  const guestCtx = await getWorkspaceContext()
+  const guest = guestCtx?.current.guest
+  if (guestCtx && guest) {
+    if (guest.ended) return <GuestEnded workspaceName={guestCtx.current.workspace.name} accessUntil={guest.accessUntil} />
+    redirect(guest.setlistIds.length === 1 ? `/setlists/${guest.setlistIds[0]}` : '/setlists')
+  }
   const [shows, setlistsByShow, songCounts, taskData, pending, profiles, { data: { user } }, workspaceCtx] = await Promise.all([
     getCachedShows(),
     getCachedSetlistsByShow(),

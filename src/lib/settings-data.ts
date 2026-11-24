@@ -5,7 +5,8 @@ import { getWorkspaceContext } from '@/lib/workspace'
 import { getCachedAllProfilesWithCrew, getCachedProfileAvatars, getCachedUser } from '@/lib/data'
 import { normalisePermissions } from '@/lib/workspace-shared'
 import { SECTIONS, sectionLevelsFrom } from '@/lib/workspace-sections'
-import type { InviteRow, MemberRow, WorkspaceSummary } from '@/components/workspace/settings-types'
+import { setlistGuestFrom } from '@/lib/setlist-guest'
+import type { InviteRow, MemberRow, SetlistOption, WorkspaceSummary } from '@/components/workspace/settings-types'
 
 /** Who is looking at Settings, and which workspace's settings they're seeing. Shared by the layout and every page. */
 export const getSettingsContext = cache(async () => {
@@ -56,13 +57,15 @@ export const getSettingsMembers = cache(async (): Promise<MemberRow[]> => {
     getCachedAllProfilesWithCrew(),
     getCachedProfileAvatars(),
   ])
-  return (rows ?? []).map(m => ({
+  // Setlist guests are only listed for admins, who manage them; the band doesn't see them as members.
+  return (rows ?? []).filter(m => s.isAdmin || m.user_id === s.userId || !setlistGuestFrom(m.permissions, m.role)).map(m => ({
     userId: m.user_id,
     name: profiles.find(p => p.id === m.user_id)?.display_name?.trim() || 'Unnamed member',
     role: m.role,
     treasurer: normalisePermissions(m.permissions).treasurer === true,
     merchManager: normalisePermissions(m.permissions).merch_manager === true,
     merchCrew: normalisePermissions(m.permissions).merch_crew === true,
+    guest: setlistGuestFrom(m.permissions, m.role),
     sections: sectionLevelsFrom(s.isAdmin ? m.permissions : null, m.role),
     isYou: m.user_id === s.userId,
     avatarUrl: avatars[m.user_id] ?? null,
@@ -87,7 +90,17 @@ export const getSettingsInvites = cache(async (): Promise<InviteRow[]> => {
       id: i.id, token: i.token, role: i.role, expiresAt: i.expires_at, maxUses: i.max_uses, useCount: i.use_count,
       sections: i.permissions && typeof i.permissions === 'object' && !Array.isArray(i.permissions) && 'sections' in i.permissions ? sectionLevelsFrom(i.permissions, 'member') : null,
       crew: i.role !== 'admin' && !!i.permissions && typeof i.permissions === 'object' && !Array.isArray(i.permissions) && (i.permissions as Record<string, unknown>).merch_crew === true,
+      guest: (() => { const g = setlistGuestFrom(i.permissions, i.role); return g ? { count: g.setlistIds.length, accessUntil: g.accessUntil } : null })(),
     }))
+})
+
+/** The workspace's setlists, upcoming first then most recent, for sharing with setlist guests. Admins only. */
+export const getShareableSetlists = cache(async (): Promise<SetlistOption[]> => {
+  const s = await getSettingsContext()
+  if (!s.isAdmin || s.isPersonal) return []
+  const supabase = await createClient()
+  const { data } = await supabase.from('setlists').select('id, title, show_date').eq('workspace_id', s.workspace.id).order('show_date', { ascending: false, nullsFirst: false })
+  return (data ?? []).map(r => ({ id: r.id, title: r.title, showDate: r.show_date }))
 })
 
 /** Tags already on entries in the current workspace, so Money settings can list and rename them. */

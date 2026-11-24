@@ -3,12 +3,14 @@
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { KeyRound, Link2, Trash2, UserPlus, Users } from 'lucide-react'
+import { KeyRound, Link2, ListMusic, Trash2, UserPlus, Users } from 'lucide-react'
 import { setMemberRole, setMemberTreasurer, setMemberMerchManager, setMemberMerchCrew, removeMember } from '@/actions/workspace'
 import { StatusPill } from '@/components/ui/StatusPill'
 import { UserAvatar } from '@/components/ui/UserAvatar'
 import { cn } from '@/lib/utils'
-import type { MemberRow } from './settings-types'
+import type { MemberRow, SetlistOption } from './settings-types'
+import { GuestAccessDialog } from './GuestAccessDialog'
+import { formatGuestDate } from '@/lib/setlist-guest'
 import { AccessDialog } from './AccessDialog'
 import { SECTIONS, type SectionKey } from '@/lib/workspace-sections'
 import type { WorkspaceGroup } from '@/lib/groups'
@@ -26,15 +28,20 @@ interface Props {
   groups: WorkspaceGroup[]
   /** Sections the workspace has switched off. */
   offSections?: SectionKey[]
+  /** For changing what setlist guests can see. */
+  setlists?: SetlistOption[]
+  /** 'YYYY-MM-DD' in India. */
+  today: string
 }
 
-export function MembersSettings({ workspaceName, members, isAdmin, isOwner, activeInviteCount, groups, offSections = [] }: Props) {
+export function MembersSettings({ workspaceName, members, isAdmin, isOwner, activeInviteCount, groups, offSections = [], setlists = [], today }: Props) {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
   const [accessFor, setAccessFor] = useState<MemberRow | null>(null)
   const [groupsFor, setGroupsFor] = useState<MemberRow | null>(null)
-  const people = members.map(m => ({ userId: m.userId, name: m.name, avatarUrl: m.avatarUrl }))
+  const [guestFor, setGuestFor] = useState<MemberRow | null>(null)
+  const people = members.filter(m => !m.guest).map(m => ({ userId: m.userId, name: m.name, avatarUrl: m.avatarUrl }))
 
   const run = (fn: () => Promise<{ error?: string }>) => {
     setError(null)
@@ -75,20 +82,40 @@ export function MembersSettings({ workspaceName, members, isAdmin, isOwner, acti
                   {m.treasurer && <StatusPill tone="amber">Treasurer</StatusPill>}
                   {m.merchManager && <StatusPill tone="amber">Merch</StatusPill>}
                   {m.merchCrew && <StatusPill tone="gray">Merch crew</StatusPill>}
-                  {isAdmin && m.role === 'member' && SECTIONS.some(sec => m.sections[sec.key] === 'none') && (
+                  {m.guest && <StatusPill tone="gray">Setlist guest</StatusPill>}
+                  {m.guest && (
+                    <span className="text-xs text-gray-500">
+                      {m.guest.setlistIds.length} {m.guest.setlistIds.length === 1 ? 'setlist' : 'setlists'}
+                      {m.guest.accessUntil && (m.guest.ended ? <> · <span className="font-bold text-amber-700">ended {formatGuestDate(m.guest.accessUntil)}</span></> : ` · until ${formatGuestDate(m.guest.accessUntil)}`)}
+                    </span>
+                  )}
+                  {isAdmin && m.role === 'member' && !m.guest && SECTIONS.some(sec => m.sections[sec.key] === 'none') && (
                     <StatusPill tone="gray">Limited</StatusPill>
                   )}
                   {groups.filter(g => g.memberIds.includes(m.userId)).map(g => <GroupTag key={g.id} group={g} />)}
                 </div>
               </div>
 
-              {isAdmin && groups.length > 0 && (
+              {isAdmin && groups.length > 0 && !m.guest && (
                 <button type="button" onClick={() => setGroupsFor(m)} aria-label={`Groups for ${m.name}`}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 px-2.5 py-1.5 text-xs font-bold text-gray-700 hover:bg-brand-50">
                   <Users className="h-3.5 w-3.5" /> Groups
                 </button>
               )}
-              {manageable && (
+              {manageable && m.guest && (
+                <div className="flex items-center gap-2">
+                  <button type="button" disabled={pending} onClick={() => setGuestFor(m)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 px-2.5 py-1.5 text-xs font-bold text-gray-700 hover:bg-brand-50">
+                    <ListMusic className="h-3.5 w-3.5" /> Setlists
+                  </button>
+                  <button type="button" disabled={pending} aria-label={`Remove ${m.name}`}
+                    onClick={() => { if (window.confirm(`Remove ${m.name}? They won’t see any of ${workspaceName}’s setlists any more.`)) run(() => removeMember(m.userId)) }}
+                    className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+              {manageable && !m.guest && (
                 <div className="flex items-center gap-3">
                   <label className="flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-gray-600">
                     <input type="checkbox" checked={m.treasurer} disabled={pending} onChange={e => run(() => setMemberTreasurer(m.userId, e.target.checked))} className="h-4 w-4 accent-brand-400" />
@@ -156,6 +183,10 @@ export function MembersSettings({ workspaceName, members, isAdmin, isOwner, acti
       {groupsFor && (
         <MemberGroupsSheet key={groupsFor.userId} person={{ userId: groupsFor.userId, name: groupsFor.name, avatarUrl: groupsFor.avatarUrl }}
           groups={groups} people={people} open onOpenChange={o => { if (!o) setGroupsFor(null) }} />
+      )}
+      {guestFor?.guest && (
+        <GuestAccessDialog key={guestFor.userId} memberId={guestFor.userId} memberName={guestFor.name} guest={guestFor.guest}
+          setlists={setlists} today={today} open onOpenChange={o => { if (!o) setGuestFor(null) }} />
       )}
       {accessFor && (
         <AccessDialog

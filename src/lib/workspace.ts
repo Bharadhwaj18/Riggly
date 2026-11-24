@@ -5,6 +5,7 @@ import { getCachedUser } from '@/lib/auth-cache'
 import { WORKSPACE_COOKIE, pickCurrentWorkspace, normalisePermissions } from '@/lib/workspace-shared'
 import type { WorkspaceContext, WorkspaceMembership } from '@/types/workspace'
 import { featuresFrom, hiddenSectionsOf, sectionLevelsFrom, withFeatures, type SectionKey } from '@/lib/workspace-sections'
+import { guestSectionLevels, setlistGuestFrom } from '@/lib/setlist-guest'
 
 /**
  * The signed-in user's workspaces plus which one is currently selected
@@ -33,9 +34,11 @@ export const getWorkspaceContext = cache(async (): Promise<WorkspaceContext | nu
     .map(m => {
       const workspace = workspaces.find(w => w.id === m.workspace_id)
       return workspace
-        ? (() => {
+        ? ((): WorkspaceMembership => {
             const features = featuresFrom(workspace.settings)
-            return { workspace, role: m.role, permissions: normalisePermissions(m.permissions), features, sections: withFeatures(sectionLevelsFrom(m.permissions, m.role), features) }
+            const guest = setlistGuestFrom(m.permissions, m.role)
+            const levels = guest ? guestSectionLevels(guest.ended) : sectionLevelsFrom(m.permissions, m.role)
+            return { workspace, role: m.role, permissions: normalisePermissions(m.permissions), features, sections: withFeatures(levels, features), guest }
           })()
         : null
     })
@@ -84,9 +87,13 @@ export function merchScopeOf(membership: WorkspaceMembership): MerchScope {
   return membership.sections.merch === 'none' ? 'none' : 'full'
 }
 
-/** Sections hidden from the nav. Merch crew still get the Merch link (it opens their kits). */
+/**
+ * Sections hidden from the nav. Merch crew still get the Merch link (it opens their kits). Setlist guests only get
+ * Setlists: Songs is open to them only so a song's chord chart opens from their setlist.
+ */
 export function navHiddenSections(membership: WorkspaceMembership): SectionKey[] {
   const hidden = hiddenSectionsOf(membership.sections)
+  if (membership.guest) return hidden.includes('songs') ? hidden : [...hidden, 'songs']
   return merchScopeOf(membership) === 'crew' ? hidden.filter(k => k !== 'merch') : hidden
 }
 

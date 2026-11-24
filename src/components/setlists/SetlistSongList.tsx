@@ -25,9 +25,11 @@ import type { SetlistSongWithSong } from '@/types'
 interface SetlistSongListProps {
   setlistId: string
   initialItems: SetlistSongWithSong[]
+  /** View only (no reordering or removing), for members who can only look. */
+  readOnly?: boolean
 }
 
-export function SetlistSongList({ setlistId, initialItems }: SetlistSongListProps) {
+export function SetlistSongList({ setlistId, initialItems, readOnly = false }: SetlistSongListProps) {
   const [items, setItems] = useState(initialItems)
   // Render-time state reset (no useEffect, same pattern used elsewhere in
   // this app) — a song added via the "Add Songs"/"Bulk Import" modals
@@ -89,7 +91,7 @@ export function SetlistSongList({ setlistId, initialItems }: SetlistSongListProp
   if (!items.length) {
     return (
       <div className="rounded-2xl border-2 border-dashed border-brand-200 py-12 text-center text-sm text-gray-500">
-        No songs added yet. Use &ldquo;Bulk Import&rdquo; or &ldquo;Add Songs&rdquo; to build your setlist.
+        {readOnly ? 'No songs in this setlist yet.' : <>No songs added yet. Use &ldquo;Bulk Import&rdquo; or &ldquo;Add Songs&rdquo; to build your setlist.</>}
       </div>
     )
   }
@@ -136,6 +138,7 @@ export function SetlistSongList({ setlistId, initialItems }: SetlistSongListProp
                 index={entry.index}
                 setlistId={setlistId}
                 onRemove={() => handleRemove(entry.item.song_id)}
+                readOnly={readOnly}
               />
             )
           })}

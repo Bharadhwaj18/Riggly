@@ -74,6 +74,9 @@ export default async function SetlistPage({ params }: Props) {
   const estimatedMinutes = Math.round(songCount * AVG_SONG_MINUTES)
   const songsWithoutChart = setlistSongs.filter(ss => !ss.song.chord_chart?.trim()).map(ss => ss.song.title)
   const firstSong = setlistSongs[0]?.song
+  // View-only members (and setlist guests) just look: no editing, adding, reordering or deleting.
+  const canEdit = ctx?.current.sections.setlists === 'edit'
+  const isGuest = !!ctx?.current.guest
 
   return (
     <div>
@@ -90,7 +93,7 @@ export default async function SetlistPage({ params }: Props) {
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-gray-500">
             {date && <span className="flex items-center gap-1.5"><Calendar className="h-4 w-4" />{date}</span>}
             {setlist.venue && <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4" />{setlist.venue}</span>}
-            {linkedShow && (
+            {linkedShow && !isGuest && (
               <Link href={`/shows/${linkedShow.id}`} className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800 hover:opacity-80">
                 <Link2 className="h-3.5 w-3.5" /> {linkedShow.title} →
               </Link>
@@ -104,10 +107,14 @@ export default async function SetlistPage({ params }: Props) {
               <Link href={`/songs/${firstSong.id}?from=/setlists/${id}&stage=1`}><Play className="h-4 w-4" /> Stage mode</Link>
             </Button>
           )}
-          <Button variant="secondary" asChild>
-            <Link href={`/setlists/${id}/edit`}><Pencil className="h-4 w-4" /> Edit details</Link>
-          </Button>
-          <DeleteSetlistButton id={id} />
+          {canEdit && (
+            <>
+              <Button variant="secondary" asChild>
+                <Link href={`/setlists/${id}/edit`}><Pencil className="h-4 w-4" /> Edit details</Link>
+              </Button>
+              <DeleteSetlistButton id={id} />
+            </>
+          )}
         </div>
       </div>
 
@@ -121,7 +128,7 @@ export default async function SetlistPage({ params }: Props) {
               {songCount} {songCount === 1 ? 'song' : 'songs'}
               <span className="ml-1.5 font-medium text-gray-500">· about {estimatedMinutes} min</span>
             </p>
-            <div className="flex gap-2">
+            {canEdit && <div className="flex gap-2">
               <BulkImportModal
                 setlistId={id}
                 existingSongs={allSongs}
@@ -134,16 +141,17 @@ export default async function SetlistPage({ params }: Props) {
                 availableSections={availableSections}
                 plays={plays}
               />
-            </div>
+            </div>}
           </div>
 
           {/* Drag-and-drop song list */}
           <SetlistSongList
             setlistId={id}
             initialItems={setlistSongs as SetlistSongWithSong[]}
+            readOnly={!canEdit}
           />
 
-          <SuggestedSongs
+          {canEdit && <SuggestedSongs
             setlistId={id}
             songs={allSongs}
             currentSongIds={currentSongIds}
@@ -152,8 +160,8 @@ export default async function SetlistPage({ params }: Props) {
             showTypeId={setlist.show_type_id}
             knownTags={tagCounts(allSongs).map(t => t.tag)}
             section={(setlistSongs[setlistSongs.length - 1] as SetlistSongWithSong | undefined)?.section ?? null}
-            canEdit={ctx?.current.sections.setlists === 'edit'}
-          />
+            canEdit={canEdit}
+          />}
         </div>
 
         {/* Side column */}
@@ -172,7 +180,7 @@ export default async function SetlistPage({ params }: Props) {
             </div>
           </div>
 
-          {songsWithoutChart.length > 0 && (
+          {songsWithoutChart.length > 0 && canEdit && (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
               <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-amber-700">Heads up</p>
               <p className="mt-1.5 text-sm leading-relaxed">
@@ -183,7 +191,7 @@ export default async function SetlistPage({ params }: Props) {
             </div>
           )}
 
-          <div className="rounded-2xl border border-brand-200 bg-white p-5 shadow-sm">
+          {!isGuest && <div className="rounded-2xl border border-brand-200 bg-white p-5 shadow-sm">
             <SectionLabel>Details</SectionLabel>
             <dl className="mt-3 space-y-2 text-sm">
               <div className="flex justify-between gap-3"><dt className="text-gray-500">Songs</dt><dd className="font-bold text-gray-900">{songCount}</dd></div>
@@ -193,7 +201,7 @@ export default async function SetlistPage({ params }: Props) {
                 <div className="flex justify-between gap-3"><dt className="text-gray-500">Last edited by</dt><dd className="font-bold text-gray-900">{nameOf(setlist.updated_by)}</dd></div>
               )}
             </dl>
-          </div>
+          </div>}
         </div>
       </div>
     </div>

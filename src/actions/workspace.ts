@@ -10,6 +10,8 @@ import { getWorkspaceContext } from '@/lib/workspace'
 import { PENDING_INVITE_COOKIE, WORKSPACE_COOKIE } from '@/lib/workspace-shared'
 import { chooseWorkspace } from '@/lib/workspace-cookies'
 import { SECTIONS, type SectionLevel, type SectionKey } from '@/lib/workspace-sections'
+import { guestSectionLevels, istToday, setlistGuestFrom } from '@/lib/setlist-guest'
+import { addDaysISO } from '@/lib/dates'
 import { createWorkspaceInputSchema, updateWorkspaceDetailsSchema, type CreateWorkspaceInput, type UpdateWorkspaceDetailsInput } from '@/lib/validators'
 
 async function selectWorkspace(workspaceId: string) {
@@ -101,12 +103,36 @@ export async function transferOwnership(userId: string): Promise<{ error?: strin
 }
 
 export interface CreateInviteInput {
-  /** 'crew' joins as a member who is Merch crew: only their own show kits in Merch, plus the sections given. */
-  role: 'member' | 'admin' | 'crew'
+  /**
+   * 'crew' joins as a member who is Merch crew: only their own show kits in Merch, plus the sections given.
+   * 'guest' joins as a setlist guest: only the setlists given, view only, until accessUntil.
+   */
+  role: 'member' | 'admin' | 'crew' | 'guest'
   expiresInDays: number
   maxUses: number | null
   /** What a member who joins with this link can open. Ignored for admins, who always get everything. */
   sections?: Partial<Record<SectionKey, SectionLevel>>
+  /** Setlist guests: the setlists they can see. */
+  setlistIds?: string[]
+  /** Setlist guests: their last day, 'YYYY-MM-DD'. */
+  accessUntil?: string
+}
+
+/** The longest a setlist guest's access can run. */
+const GUEST_MAX_DAYS = 366
+
+/** Checks a guest's setlists (all in this workspace, at least one) and last day (today to a year away). */
+async function checkGuestAccess(workspaceId: string, setlistIds: unknown, accessUntil: unknown): Promise<{ error: string } | { ids: string[]; until: string }> {
+  const ids = Array.isArray(setlistIds) ? [...new Set(setlistIds.filter((x): x is string => typeof x === 'string'))] : []
+  if (!ids.length) return { error: 'Pick at least one setlist.' }
+  if (typeof accessUntil !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(accessUntil)) return { error: 'Pick the last day they can look.' }
+  const today = istToday()
+  if (accessUntil < today) return { error: 'The last day can’t be in the past.' }
+  if (accessUntil > addDaysISO(today, GUEST_MAX_DAYS)) return { error: 'Access can run for up to a year.' }
+  const supabase = await createClient()
+  const { data } = await supabase.from('setlists').select('id').eq('workspace_id', workspaceId).in('id', ids)
+  if ((data ?? []).length !== ids.length) return { error: 'One of those setlists isn’t in this workspace any more. Refresh and try again.' }
+  return { ids, until: accessUntil }
 }
 
 export async function createInvite(input: CreateInviteInput): Promise<{ error?: string; token?: string }> {
@@ -117,6 +143,25 @@ export async function createInvite(input: CreateInviteInput): Promise<{ error?: 
   }
   if (input.maxUses !== null && (!Number.isInteger(input.maxUses) || input.maxUses < 1)) {
     return { error: 'Max uses must be at least 1.' }
+  }
+  if (input.role === 'guest') {
+    const checked = await checkGuestAccess(auth.workspaceId, input.setlistIds, input.accessUntil)
+    if ('error' in checked) return { error: checked.error }
+    const supabase = await createClient()
+    const { data, error } = await supabase
+      .from('workspace_invites')
+      .insert({
+        workspace_id: auth.workspaceId,
+        role: 'member',
+        permissions: { sections: guestSectionLevels(false), setlist_guest: true, setlist_ids: checked.ids, access_until: checked.until },
+        max_uses: input.maxUses,
+        expires_at: new Date(Date.now() + input.expiresInDays * 86_400_000).toISOString(),
+      })
+      .select('token')
+      .single()
+    if (error) return { error: error.message }
+    revalidatePath('/settings', 'layout')
+    return { token: data.token }
   }
   const allowed = new Set<string>(SECTIONS.map(s => s.key))
   const crew = input.role === 'crew'
@@ -199,6 +244,32 @@ async function setMemberPermission(userId: string, key: 'treasurer' | 'merch_man
   const { error } = await supabase
     .from('workspace_members')
     .update({ permissions })
+    .eq('workspace_id', auth.workspaceId)
+    .eq('user_id', userId)
+  if (error) return { error: error.message }
+  revalidatePath('/', 'layout')
+  return {}
+}
+
+/** Changes which setlists a setlist guest can see, and their last day. Admins only, and only for guests. */
+export async function setGuestAccess(userId: string, setlistIds: string[], accessUntil: string): Promise<{ error?: string }> {
+  const auth = await requireAdminContext()
+  if ('error' in auth) return { error: auth.error }
+  const supabase = await createClient()
+  const { data: member } = await supabase
+    .from('workspace_members')
+    .select('permissions, role')
+    .eq('workspace_id', auth.workspaceId)
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (!member) return { error: 'Member not found.' }
+  if (!setlistGuestFrom(member.permissions, member.role)) return { error: 'They aren’t a setlist guest.' }
+  const checked = await checkGuestAccess(auth.workspaceId, setlistIds, accessUntil)
+  if ('error' in checked) return { error: checked.error }
+  const raw = member.permissions && typeof member.permissions === 'object' && !Array.isArray(member.permissions) ? member.permissions : {}
+  const { error } = await supabase
+    .from('workspace_members')
+    .update({ permissions: { ...raw, setlist_ids: checked.ids, access_until: checked.until } })
     .eq('workspace_id', auth.workspaceId)
     .eq('user_id', userId)
   if (error) return { error: error.message }

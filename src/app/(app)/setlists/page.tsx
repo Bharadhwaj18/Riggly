@@ -6,6 +6,7 @@ import { getWorkspaceContext } from '@/lib/workspace'
 import { ScopeToggle } from '@/components/layout/ScopeToggle'
 import { PersonalShows } from '@/components/shows/PersonalShows'
 import { todayISO } from '@/lib/shows'
+import { formatGuestDate } from '@/lib/setlist-guest'
 import { SetlistsBrowser, type PreviewSong } from '@/components/setlists/SetlistsBrowser'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -45,27 +46,31 @@ export default async function SetlistsPage({ searchParams }: { searchParams: Pro
   const today = todayISO()
   const upcomingCount = setlists.filter(s => s.show_date && s.show_date >= today).length
 
-  const newButton = (
+  const canEdit = wsCtx?.current.sections.setlists === 'edit'
+  const guest = wsCtx?.current.guest
+  const newButton = canEdit ? (
     <Button asChild>
       <Link href="/setlists/new">
         <Plus className="h-4 w-4" /> New setlist
       </Link>
     </Button>
-  )
+  ) : null
 
   return (
     <div>
       <PageHeader
         title="Setlists"
-        subtitle={`${setlists.length} ${setlists.length === 1 ? 'setlist' : 'setlists'}${upcomingCount ? ` · ${upcomingCount} for upcoming shows` : ''}`}
+        subtitle={guest
+          ? `Shared with you, view only${guest.accessUntil ? ` · until ${formatGuestDate(guest.accessUntil)}` : ''}`
+          : `${setlists.length} ${setlists.length === 1 ? 'setlist' : 'setlists'}${upcomingCount ? ` · ${upcomingCount} for upcoming shows` : ''}`}
         action={newButton}
       />
 
       {!setlists.length ? (
         <EmptyState
           icon={<ListMusic className="h-12 w-12" />}
-          title="No setlists yet"
-          description="Create a setlist for your next event"
+          title={guest ? 'No setlists shared with you yet' : 'No setlists yet'}
+          description={canEdit ? 'Create a setlist for your next event' : guest ? 'Ask whoever invited you to share one.' : 'Nothing to see here yet.'}
           action={newButton}
         />
       ) : (

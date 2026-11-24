@@ -1,5 +1,6 @@
 import type { Database } from './database'
 import type { SectionLevels, WorkspaceFeatures } from '@/lib/workspace-sections'
+import type { SetlistGuest } from '@/lib/setlist-guest'
 
 export type Workspace = Database['public']['Tables']['workspaces']['Row']
 export type WorkspaceMember = Database['public']['Tables']['workspace_members']['Row']
@@ -13,6 +14,8 @@ export interface WorkspaceMembership {
   sections: SectionLevels
   /** Sections this workspace has switched on (set in the admin panel). Off means hidden for everyone. */
   features: WorkspaceFeatures
+  /** Set when this member is a setlist guest: only the setlists picked for them, view only, until a date. */
+  guest?: SetlistGuest | null
 }
 
 export interface WorkspaceContext {

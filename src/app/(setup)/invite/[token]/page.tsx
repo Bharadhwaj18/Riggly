@@ -8,6 +8,7 @@ import { BrandMark } from '@/components/ui/BrandMark'
 import { Wordmark } from '@/components/ui/Wordmark'
 import { WorkspaceAvatar } from '@/components/ui/WorkspaceAvatar'
 import { SECTIONS, sectionLevelsFrom } from '@/lib/workspace-sections'
+import { formatGuestDate } from '@/lib/setlist-guest'
 
 const STATE_MESSAGES: Record<string, string> = {
   revoked: 'This invite link was cancelled. Ask whoever invited you for a new one.',
@@ -27,6 +28,13 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
   // What a member joining with this link can open (null = everything, or the function isn't set up yet).
   const { data: rawSections } = await supabase.rpc('invite_sections', { p_token: token })
   const { data: crewInvite } = await supabase.rpc('invite_crew', { p_token: token })
+  // A setlist-guest link: which setlists, and until when (null for other links, or before its SQL has been run).
+  const { data: guestRaw } = await supabase.rpc('invite_setlist_guest', { p_token: token })
+  const guestObj = guestRaw && typeof guestRaw === 'object' && !Array.isArray(guestRaw) ? (guestRaw as Record<string, unknown>) : null
+  const guest = guestObj ? {
+    titles: Array.isArray(guestObj.titles) ? guestObj.titles.filter((t): t is string => typeof t === 'string') : [],
+    until: typeof guestObj.access_until === 'string' ? guestObj.access_until : null,
+  } : null
   const levels = rawSections && typeof rawSections === 'object' && !Array.isArray(rawSections) ? sectionLevelsFrom({ sections: rawSections }, 'member') : null
   const canOpen = levels
     ? [
@@ -70,9 +78,15 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
               <p className="mt-1 text-sm text-gray-500">{invite.member_count} {invite.member_count === 1 ? 'member' : 'members'} already in</p>
             )}
             <span className="mt-4 inline-flex rounded-full bg-brand-100 px-3 py-1 text-xs font-bold text-brand-700">
-              You’ll join as {invite.invite_role === 'admin' ? 'an Admin' : 'a Member'}
+              You’ll join as {invite.invite_role === 'admin' ? 'an Admin' : guest ? 'a guest' : 'a Member'}
             </span>
-            {canOpen && (
+            {guest ? (
+              <p className="mt-3 text-sm text-gray-600">
+                You’ll be able to see {guest.titles.length === 1 ? 'the setlist' : 'these setlists'}, with their songs and chords:{' '}
+                <span className="font-semibold text-gray-800">{guest.titles.join(', ') || 'none yet'}</span>.
+                {guest.until && <> You can look until the end of {formatGuestDate(guest.until)}.</>}
+              </p>
+            ) : canOpen && (
               <p className="mt-3 text-sm text-gray-600">
                 {canOpen.length === 0 ? 'An admin will choose what you can open after you join.' : <>You’ll be able to open: <span className="font-semibold text-gray-800">{canOpen.join(', ')}</span></>}
               </p>

@@ -1,5 +1,5 @@
 import { cache } from 'react'
-import { isMerchCrewRow } from '@/lib/merch-crew'
+import { isOutsiderRow } from '@/lib/merch-crew'
 import { createClient } from '@/lib/supabase/server'
 import { getWorkspaceContext } from '@/lib/workspace'
 import { visibleFrom, withoutDemos } from '@/lib/demo'
@@ -131,7 +131,7 @@ const getCachedProfileRows = cache(async () => {
   const ids = (members ?? []).map(m => m.user_id)
   if (!ids.length) return { profiles: [], crew: new Set<string>() }
   const { data } = await supabase.from('profiles').select('id, display_name').in('id', ids)
-  return { profiles: data ?? [], crew: new Set((members ?? []).filter(isMerchCrewRow).map(m => m.user_id)) }
+  return { profiles: data ?? [], crew: new Set((members ?? []).filter(isOutsiderRow).map(m => m.user_id)) }
 })
 
 /**

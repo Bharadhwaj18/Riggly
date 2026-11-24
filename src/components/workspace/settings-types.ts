@@ -1,4 +1,12 @@
 import type { SectionKey, SectionLevels } from '@/lib/workspace-sections'
+import type { SetlistGuest } from '@/lib/setlist-guest'
+
+/** A setlist an admin can share with a setlist guest. */
+export interface SetlistOption {
+  id: string
+  title: string
+  showDate: string | null
+}
 
 export interface MemberRow {
   sections: SectionLevels
@@ -10,6 +18,8 @@ export interface MemberRow {
   merchManager: boolean
   /** Merch crew: sees only the show kits they run. */
   merchCrew: boolean
+  /** Setlist guest: sees only these setlists, view only, until a date. Filled in for admins only. */
+  guest: SetlistGuest | null
   isYou: boolean
   /** Their profile photo, when they have one. */
   avatarUrl?: string | null
@@ -26,6 +36,8 @@ export interface InviteRow {
   sections: SectionLevels | null
   /** Joins as Merch crew. */
   crew: boolean
+  /** Joins as a setlist guest. */
+  guest: { count: number; accessUntil: string | null } | null
 }
 
 export interface WorkspaceSummary {

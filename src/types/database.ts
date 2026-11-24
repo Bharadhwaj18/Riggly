@@ -2263,6 +2263,9 @@ export type Database = {
       accept_workspace_invite: { Args: { p_token: string }; Returns: string }
       join_with_invite: { Args: { p_token: string }; Returns: string }
       invite_sections: { Args: { p_token: string }; Returns: Json }
+      invite_setlist_guest: { Args: { p_token: string }; Returns: Json }
+      setlist_guest_state: { Args: { ws: string }; Returns: string }
+      guest_setlist_ids: { Args: { ws: string }; Returns: string[] }
       invite_preview: {
         Args: { p_token: string }
         Returns: {

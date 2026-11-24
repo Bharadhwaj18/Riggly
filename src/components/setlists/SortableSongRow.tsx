@@ -14,10 +14,12 @@ interface SortableSongRowProps {
   index: number
   setlistId: string
   onRemove: () => void
+  /** View only: no dragging or removing. */
+  readOnly?: boolean
 }
 
-export function SortableSongRow({ id, song, index, setlistId, onRemove }: SortableSongRowProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+export function SortableSongRow({ id, song, index, setlistId, onRemove, readOnly = false }: SortableSongRowProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: readOnly })
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -36,14 +38,14 @@ export function SortableSongRow({ id, song, index, setlistId, onRemove }: Sortab
       )}
     >
       {/* Drag handle */}
-      <button
+      {!readOnly && <button
         {...attributes}
         {...listeners}
         className="cursor-grab touch-none text-gray-300 hover:text-gray-600 active:cursor-grabbing"
         aria-label="Drag to reorder"
       >
         <GripVertical className="h-5 w-5" />
-      </button>
+      </button>}
 
       {/* Position number */}
       <span className="w-5 shrink-0 text-center text-sm font-bold text-gray-400">{index + 1}</span>
@@ -60,13 +62,15 @@ export function SortableSongRow({ id, song, index, setlistId, onRemove }: Sortab
       </Link>
 
       {/* Actions */}
-      <button
-        onClick={onRemove}
-        className="text-gray-300 hover:text-red-500"
-        aria-label="Remove from setlist"
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
+      {!readOnly && (
+        <button
+          onClick={onRemove}
+          className="text-gray-300 hover:text-red-500"
+          aria-label="Remove from setlist"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      )}
     </div>
   )
 }
