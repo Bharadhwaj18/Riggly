@@ -150,7 +150,7 @@ export function Sidebar({ user, pendingPaymentCount = 0, notifications = [], wor
   const logo = (
     <Link href="/" className="flex items-center gap-2.5">
       <BrandMark className="ring-1 ring-sidebar-border" />
-      <Wordmark tone="sidebar" className="text-lg text-sidebar-strong" />
+      <Wordmark tone="sidebar" className="text-xl text-sidebar-strong" />
     </Link>
   )
 
