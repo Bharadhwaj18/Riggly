@@ -239,9 +239,10 @@
     const unique = songs.filter(s => { if (seen.has(s.id)) return false; seen.add(s.id); return true })
     unique.sort((a, b) => a.title.localeCompare(b.title))
     unique.forEach(s => {
-      const div = document.createElement('div')
+      // Opens the song's saved page, as reached from its setlist.
+      const div = document.createElement('a')
+      div.href = '/songs/' + encodeURIComponent(s.id) + '?from=/setlists/' + encodeURIComponent(s.setlistId)
       div.className = 'card'
-      div.style.cursor = 'default'
       div.innerHTML =
         '<div class="card-title">' + escHtml(s.title) + (s.song_key ? '<span class="card-key">' + escHtml(s.song_key) + '</span>' : '') + '</div>' +
         '<div class="card-meta">' + (s.artist ? escHtml(s.artist) + ' · ' : '') + 'From ' + escHtml(s.setlistTitle || 'setlist') + '</div>'

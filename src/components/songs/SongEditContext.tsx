@@ -1,8 +1,8 @@
 'use client'
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { AlertCircle, Check, Loader2, Lock, LockOpen } from 'lucide-react'
+import { AlertCircle, Check, Loader2, Lock, LockOpen, WifiOff } from 'lucide-react'
 import { saveSongDetails } from '@/actions/songs'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toaster'
@@ -168,11 +168,33 @@ export function SongEditProvider({ songId, canEdit, initial, children }: Props) 
   return <SongEditContext.Provider value={value}>{children}</SongEditContext.Provider>
 }
 
+function subscribeOnline(onChange: () => void) {
+  window.addEventListener('online', onChange)
+  window.addEventListener('offline', onChange)
+  return () => { window.removeEventListener('online', onChange); window.removeEventListener('offline', onChange) }
+}
+
+/** Whether the device has a connection (always true while rendering on the server). */
+export function useOnline() {
+  return useSyncExternalStore(subscribeOnline, () => navigator.onLine, () => true)
+}
+
 /** The lock button, with how saving is going while the song is unlocked. */
 export function LockToggle({ showStatus = true, className }: { showStatus?: boolean; className?: string }) {
   const edit = useSongEdit()
+  const online = useOnline()
   if (!edit?.canEdit) return null
   const { locked, unlock, lock } = edit
+  // Changes can't be saved without a connection (a saved offline copy is read-only), so editing waits.
+  if (!online && locked) {
+    return (
+      <div className={cn('flex items-center gap-3', className)}>
+        <Button size="sm" variant="secondary" disabled title="Editing needs a connection">
+          <WifiOff className="h-4 w-4" /> Offline
+        </Button>
+      </div>
+    )
+  }
   return (
     <div className={cn('flex items-center gap-3', className)}>
       <Button
