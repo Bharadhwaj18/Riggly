@@ -16,7 +16,7 @@ export function LogoMark({ className }: { className?: string }) {
 /** The logo on its black tile, shown wherever the product mark goes. */
 export function BrandMark({ className }: { className?: string }) {
   return (
-    <div aria-hidden="true" className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#0b0b0b] text-white shadow-sm', className)}>
+    <div aria-hidden="true" className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#0b0b0b] text-[#fafafa] shadow-sm', className)}>
       <LogoMark className="h-[88%] w-[88%]" />
     </div>
   )
