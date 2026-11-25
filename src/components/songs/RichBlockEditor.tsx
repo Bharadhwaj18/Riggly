@@ -169,7 +169,7 @@ export function RichBlockEditor({ value, onChange, label }: Props) {
     content: markupToContent(value),
     editorProps: {
       attributes: {
-        class: 'rich-chart min-h-24 px-4 py-3 font-mono text-sm leading-relaxed text-gray-900 focus:outline-none',
+        class: 'rich-chart min-h-9 px-3 py-1.5 font-mono text-sm leading-normal text-gray-900 focus:outline-none',
         'aria-label': label,
         spellcheck: 'false',
       },
@@ -201,8 +201,9 @@ export function RichBlockEditor({ value, onChange, label }: Props) {
   const keep = (e: React.PointerEvent | React.MouseEvent) => e.preventDefault()
 
   return (
-    <div>
-      <div className="flex flex-wrap items-center gap-0.5 border-b border-brand-100 px-2 py-1">
+    // The toolbar only shows on the section being typed in, so the others stay short.
+    <div className="group/rich">
+      <div className="hidden flex-wrap items-center gap-0.5 border-b border-brand-100 px-2 py-1 group-focus-within/rich:flex">
         <button type="button" onMouseDown={keep} onClick={markChords} className={cn(tool, 'text-brand-700')} title="Mark the selected chords">
           <Music className="h-3.5 w-3.5" /> Chord
         </button>
@@ -223,7 +224,7 @@ export function RichBlockEditor({ value, onChange, label }: Props) {
       </div>
 
       {palette && (
-        <div className="flex flex-wrap items-center gap-2 border-b border-brand-100 px-3 py-2">
+        <div className="hidden flex-wrap items-center gap-2 border-b border-brand-100 px-3 py-2 group-focus-within/rich:flex">
           <span className="mr-1 text-xs font-bold text-gray-500">{palette === 'text' ? 'Text colour:' : 'Highlight:'}</span>
           {(palette === 'text' ? TEXT_COLORS : HIGHLIGHTS).map(c => (
             <button

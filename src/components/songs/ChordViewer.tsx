@@ -73,6 +73,12 @@ export function ChordViewer({
   useEffect(() => {
     // Injected once per page (shared by every ChordViewer instance and the editor preview).
     ensureChordSheetCss()
+    // Offline, a saved copy of this song can be served for a "&stage=1" address it wasn't saved
+    // under, so Stage mode is also opened from the address itself.
+    if (new URLSearchParams(window.location.search).get('stage') === '1') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setStageOpen(true)
+    }
   }, [])
 
   const flush = useCallback(async (): Promise<void> => {
@@ -260,24 +266,25 @@ export function ChordViewer({
         ) : renderedBlocks.length ? (
           <div
             ref={printRef ?? internalRef}
-            className="space-y-3"
+            className="space-y-2"
             style={{ '--chord-size': `${textSize}px` } as React.CSSProperties}
           >
             {renderedBlocks.map(b => (
               <section
                 key={b.id}
-                className="rounded-2xl border border-brand-200 bg-white"
-                style={b.color ? { borderLeftColor: b.color, borderLeftWidth: 5 } : undefined}
+                className="rounded-xl border border-brand-200 bg-white px-4 py-2.5 sm:px-5"
+                style={b.color ? { borderLeftColor: b.color, borderLeftWidth: 4 } : undefined}
               >
+                {/* Compact: a small label and the chords, so a one- or two-line section stays short. */}
                 {b.heading && (
                   <h3
-                    className="border-b border-brand-100 px-5 py-2 text-xs font-extrabold uppercase tracking-[0.1em] text-gray-500 sm:px-6"
+                    className="mb-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-gray-500"
                     style={b.color ? { color: b.color } : undefined}
                   >
                     {b.heading}
                   </h3>
                 )}
-                {b.html && <div className="chord-view px-5 py-4 sm:px-6" dangerouslySetInnerHTML={{ __html: b.html }} />}
+                {b.html && <div className="chord-view" dangerouslySetInnerHTML={{ __html: b.html }} />}
               </section>
             ))}
           </div>
