@@ -1,7 +1,7 @@
 {
   "name": "Riggly",
   "short_name": "Riggly",
-  "description": "Band setlist and chord chart manager",
+  "description": "A rig for every gig",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f3f4f0",
