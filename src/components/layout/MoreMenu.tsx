@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { clearOfflineData } from '@/lib/offline'
 import { useRouter } from 'next/navigation'
 import { ChevronRight, LogOut, User } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -32,6 +33,7 @@ export function MoreMenu({ email, workspaces, currentWorkspaceId, hiddenSections
   const current = workspaces.find(w => w.id === currentWorkspaceId) ?? workspaces[0]
 
   const signOut = async () => {
+    await clearOfflineData()
     await createClient().auth.signOut()
     router.push('/login')
   }

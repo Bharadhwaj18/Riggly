@@ -16,6 +16,9 @@ import { resolveNotificationItems } from '@/lib/notifications'
 import { getWorkspaceOptions } from '@/lib/workspace-options-server'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { OfflineUserSync } from '@/components/OfflineUserSync'
+import { OfflineBar } from '@/components/offline/OfflineBar'
+import { OfflineChangesSync } from '@/components/offline/OfflineChangesSync'
+import { Suspense } from 'react'
 import { IdentifyUser } from '@/components/analytics/IdentifyUser'
 import type { ReactNode } from 'react'
 import { getWorkspaceContext, isFinanceApprover, navHiddenSections } from '@/lib/workspace'
@@ -93,6 +96,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     {/* dvh, not vh: on iPhone Safari 100vh is taller than what is visible, so focusing a field scrolled the whole page. */}
     <div className="flex h-dvh">
       <RememberLastPage />
+      <Suspense><OfflineBar /></Suspense>
+      <OfflineChangesSync workspaceId={currentWorkspaceId} userId={effectiveUser.id} />
       <OfflineUserSync email={effectiveUser.email ?? ''} displayName={profile?.display_name ?? ''} />
       <IdentifyUser userId={effectiveUser.id} email={effectiveUser.email} name={profile?.display_name} />
       <Sidebar user={effectiveUser} pendingPaymentCount={pendingCount} notifications={notificationItems}

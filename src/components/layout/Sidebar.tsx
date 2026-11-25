@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { clearOfflineData } from '@/lib/offline'
 import { BrandMark } from '@/components/ui/BrandMark'
 import { Wordmark } from '@/components/ui/Wordmark'
 import { usePathname, useRouter } from 'next/navigation'
@@ -64,6 +65,7 @@ export function Sidebar({ user, pendingPaymentCount = 0, notifications = [], wor
   const supabase = createClient()
 
   const handleSignOut = async () => {
+    await clearOfflineData()
     await supabase.auth.signOut()
     router.push('/login')
   }
