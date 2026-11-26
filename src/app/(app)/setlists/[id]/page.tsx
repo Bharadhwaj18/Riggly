@@ -70,6 +70,7 @@ export default async function SetlistPage({ params }: Props) {
   const rehearsal = setlistSongs.map(ss => ({
     songId: ss.song_id, title: ss.song.title, artist: ss.song.artist ?? null, songKey: ss.song.song_key ?? null,
     coverUrl: ss.song.cover_url ?? null, coverLink: coverLinks[ss.song_id] ?? null, reference: firstRef[ss.song_id] ?? null,
+    chordChart: ss.song.chord_chart ?? null, notes: ss.song.notes ?? null,
   }))
   const songCount = setlistSongs.length
   const estimatedMinutes = Math.round(songCount * AVG_SONG_MINUTES)

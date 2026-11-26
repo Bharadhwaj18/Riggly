@@ -1,11 +1,14 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronDown, ExternalLink, Headphones, Pause, Play, SkipBack, SkipForward } from 'lucide-react'
+import { ChevronDown, ExternalLink, Headphones, Pause, Play, SkipBack, SkipForward, StickyNote } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SOURCE_NAMES, formatTime, type PlayableSong } from '@/lib/song-references'
 import { usePlayer } from '@/components/player/PlayerProvider'
+import { chordProToDoc, blockToChordPro, colorFor, SECTION_COLORS } from '@/lib/chords/blocks'
+import { renderBlockHtml } from '@/lib/chords/render'
+import { ensureChordSheetCss } from '@/components/songs/chordSheetStyles'
 import { EmbedPlayer, type EmbedHandle } from './EmbedPlayer'
 import { ServiceMark } from './ServiceMark'
 import { Cover } from './Cover'
@@ -63,6 +66,7 @@ function RehearseView({ songs, onClose }: { songs: PlayableSong[]; onClose: () =
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    ensureChordSheetCss()
     document.addEventListener('keydown', key)
     const overflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
@@ -81,7 +85,9 @@ function RehearseView({ songs, onClose }: { songs: PlayableSong[]; onClose: () =
         <span className="w-11" />
       </div>
 
-      <div className="mx-auto flex w-full max-w-xl min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+      {/* A phone stacks the player, then the song’s notes and chart, then Up next. A wide screen puts the song beside the player. */}
+      <div className="mx-auto grid w-full max-w-6xl min-h-0 flex-1 content-start gap-4 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))] lg:grid-cols-[minmax(0,34rem)_minmax(0,1fr)] lg:gap-x-8">
+        <div className="flex flex-col gap-4 lg:col-start-1">
         <div key={song.songId} className="animate-fade-up flex items-center gap-4">
           <Cover url={song.coverUrl ?? ref.thumbnailUrl} title={song.title} size={88} />
           <div className="min-w-0">
@@ -122,7 +128,11 @@ function RehearseView({ songs, onClose }: { songs: PlayableSong[]; onClose: () =
           </div>
         )}
 
-        <div className="border-t border-brand-200 pt-2">
+        </div>
+
+        <SongSheet key={song.songId} song={song} />
+
+        <div className="border-t border-brand-200 pt-2 lg:col-start-1">
           <p className="px-1 pb-1 text-[11px] font-extrabold uppercase tracking-[0.12em] text-gray-500">Up next</p>
           {songs.slice(index + 1).map((s, offset) => {
             const i = index + 1 + offset
@@ -145,5 +155,44 @@ function RehearseView({ songs, onClose }: { songs: PlayableSong[]; onClose: () =
       </div>
     </div>,
     document.body,
+  )
+}
+
+/** The song’s band notes and chord chart, read-only, so the words and chords are in view while its reference plays. */
+function SongSheet({ song }: { song: PlayableSong }) {
+  const sections = useMemo(() => {
+    const doc = chordProToDoc(song.chordChart ?? '')
+    return doc.blocks
+      .map(block => {
+        const body = blockToChordPro(block, { withHeading: false })
+        const color = colorFor(doc, block.heading)
+        return { id: block.id, heading: block.heading.trim(), color: color ? SECTION_COLORS[color] : undefined, html: body.trim() ? renderBlockHtml(body, 0) : '' }
+      })
+      .filter(s => s.heading || s.html)
+  }, [song.chordChart])
+  const notes = song.notes?.trim()
+
+  return (
+    <section aria-label={`${song.title}: chart and notes`} className="animate-fade-up rounded-2xl border border-brand-200 bg-white p-4 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:max-h-[calc(100dvh-6rem)] lg:self-start lg:overflow-y-auto">
+      <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-gray-500">Chart and notes</p>
+      {notes && (
+        <div className="mt-3 rounded-xl bg-brand-100 p-3">
+          <p className="mb-1 flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-[0.12em] text-gray-600"><StickyNote className="h-3.5 w-3.5" />Band notes</p>
+          <p className="whitespace-pre-wrap text-sm text-gray-900">{notes}</p>
+        </div>
+      )}
+      {sections.length > 0 ? (
+        <div className="mt-3 space-y-4">
+          {sections.map(sec => (
+            <div key={sec.id}>
+              {sec.heading && <p className="mb-1 text-xs font-extrabold uppercase tracking-[0.12em]" style={sec.color ? { color: sec.color } : undefined}>{sec.heading}</p>}
+              {sec.html && <div className="chord-view" dangerouslySetInnerHTML={{ __html: sec.html }} />}
+            </div>
+          ))}
+        </div>
+      ) : (
+        !notes && <p className="mt-3 text-sm text-gray-500">No chart or notes for this song yet.</p>
+      )}
+    </section>
   )
 }

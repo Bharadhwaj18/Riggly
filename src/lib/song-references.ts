@@ -44,6 +44,9 @@ export interface PlayableSong {
   /** Where the cover came from, so it can link back to it (Spotify requires that for its artwork). */
   coverLink?: CoverLink | null
   reference: PlayableReference | null
+  /** The song’s chord chart (ChordPro) and band notes, shown beside the player while rehearsing. */
+  chordChart?: string | null
+  notes?: string | null
 }
 
 export interface CoverLink {
