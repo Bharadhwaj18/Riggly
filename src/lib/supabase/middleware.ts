@@ -45,7 +45,7 @@ export async function updateSession(request: NextRequest) {
   const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/auth')
 
   // Invite pages are reachable signed-out (they show the band and a sign-in prompt) and signed-in (accept).
-  const isPublicRoute = isAuthRoute || pathname.startsWith('/invite/') || pathname === '/welcome'
+  const isPublicRoute = isAuthRoute || pathname.startsWith('/invite/') || pathname === '/welcome' || pathname === '/privacy'
 
   // Remember an opened invite, so whatever sign-up path someone takes they end up back at it.
   const inviteToken = pathname.match(/^\/invite\/([A-Za-z0-9_-]{6,})$/)?.[1]

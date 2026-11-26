@@ -54,7 +54,7 @@ export default function WelcomePage() {
           <p className="text-sm text-[#d4d4d4]">Add {APP_NAME} to your home screen and it opens like an app, with your setlists and chords ready at the venue.</p>
         </section>
 
-        <footer className="mt-16 text-center text-xs text-[#737373]">{APP_NAME} · {APP_TAGLINE}</footer>
+        <footer className="mt-16 text-center text-xs text-[#737373]">{APP_NAME} · {APP_TAGLINE} · <Link href="/privacy" className="underline hover:text-[#d4d4d4]">Privacy and security</Link></footer>
       </div>
     </div>
   )
