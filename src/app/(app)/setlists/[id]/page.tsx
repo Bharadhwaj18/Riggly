@@ -71,6 +71,8 @@ export default async function SetlistPage({ params }: Props) {
     songId: ss.song_id, title: ss.song.title, artist: ss.song.artist ?? null, songKey: ss.song.song_key ?? null,
     coverUrl: ss.song.cover_url ?? null, coverLink: coverLinks[ss.song_id] ?? null, reference: firstRef[ss.song_id] ?? null,
     chordChart: ss.song.chord_chart ?? null, notes: ss.song.notes ?? null,
+    bpm: ss.song.bpm ?? null, timeSignature: ss.song.time_signature ?? null,
+    canEdit: !!ctx && canEditItem(ctx.current.sections.songs, ctx.current.grants ?? [], 'songs', ss.song_id),
   }))
   const songCount = setlistSongs.length
   const estimatedMinutes = Math.round(songCount * AVG_SONG_MINUTES)

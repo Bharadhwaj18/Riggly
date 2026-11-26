@@ -47,6 +47,10 @@ export interface PlayableSong {
   /** The song’s chord chart (ChordPro) and band notes, shown beside the player while rehearsing. */
   chordChart?: string | null
   notes?: string | null
+  bpm?: number | null
+  timeSignature?: string | null
+  /** Whether the viewer may edit this song (its chart, details and notes) from Rehearse. */
+  canEdit?: boolean
 }
 
 export interface CoverLink {

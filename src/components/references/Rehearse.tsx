@@ -1,14 +1,15 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronDown, ExternalLink, Headphones, Pause, Play, SkipBack, SkipForward, StickyNote } from 'lucide-react'
+import { ChevronDown, ExternalLink, Headphones, Pause, Play, SkipBack, SkipForward } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SOURCE_NAMES, formatTime, type PlayableSong } from '@/lib/song-references'
 import { usePlayer } from '@/components/player/PlayerProvider'
-import { chordProToDoc, blockToChordPro, colorFor, SECTION_COLORS } from '@/lib/chords/blocks'
-import { renderBlockHtml } from '@/lib/chords/render'
-import { ensureChordSheetCss } from '@/components/songs/chordSheetStyles'
+import { ChordViewer } from '@/components/songs/ChordViewer'
+import { SongDetails, SongNotesCard } from '@/components/songs/SongDetails'
+import { LockToggle, SongEditProvider, useSongEdit } from '@/components/songs/SongEditContext'
+import { StatusPill } from '@/components/ui/StatusPill'
 import { EmbedPlayer, type EmbedHandle } from './EmbedPlayer'
 import { ServiceMark } from './ServiceMark'
 import { Cover } from './Cover'
@@ -66,7 +67,6 @@ function RehearseView({ songs, onClose }: { songs: PlayableSong[]; onClose: () =
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    ensureChordSheetCss()
     document.addEventListener('keydown', key)
     const overflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
@@ -158,41 +158,56 @@ function RehearseView({ songs, onClose }: { songs: PlayableSong[]; onClose: () =
   )
 }
 
-/** The song’s band notes and chord chart, read-only, so the words and chords are in view while its reference plays. */
+/**
+ * The song itself, beside its reference: the same lock, details, band notes and chord chart as the song page,
+ * so the chart can be fixed and a note added while the reference plays.
+ */
 function SongSheet({ song }: { song: PlayableSong }) {
-  const sections = useMemo(() => {
-    const doc = chordProToDoc(song.chordChart ?? '')
-    return doc.blocks
-      .map(block => {
-        const body = blockToChordPro(block, { withHeading: false })
-        const color = colorFor(doc, block.heading)
-        return { id: block.id, heading: block.heading.trim(), color: color ? SECTION_COLORS[color] : undefined, html: body.trim() ? renderBlockHtml(body, 0) : '' }
-      })
-      .filter(s => s.heading || s.html)
-  }, [song.chordChart])
-  const notes = song.notes?.trim()
-
   return (
-    <section aria-label={`${song.title}: chart and notes`} className="animate-fade-up rounded-2xl border border-brand-200 bg-white p-4 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:max-h-[calc(100dvh-6rem)] lg:self-start lg:overflow-y-auto">
-      <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-gray-500">Chart and notes</p>
-      {notes && (
-        <div className="mt-3 rounded-xl bg-brand-100 p-3">
-          <p className="mb-1 flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-[0.12em] text-gray-600"><StickyNote className="h-3.5 w-3.5" />Band notes</p>
-          <p className="whitespace-pre-wrap text-sm text-gray-900">{notes}</p>
+    <section aria-label={`${song.title}: details, notes and chart`} className="animate-fade-up min-w-0 rounded-2xl border border-brand-200 bg-white p-4 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:max-h-[calc(100dvh-6rem)] lg:self-start lg:overflow-y-auto">
+      <SongEditProvider
+        songId={song.songId}
+        canEdit={!!song.canEdit}
+        initial={{ title: song.title, artist: song.artist ?? '', song_key: song.songKey ?? '', bpm: song.bpm ?? null, time_signature: song.timeSignature ?? '', notes: song.notes ?? '' }}
+      >
+        <div className="mb-3 flex items-center gap-3">
+          <p className="flex-1 text-[11px] font-extrabold uppercase tracking-[0.12em] text-gray-500">The song</p>
+          <LockToggle />
         </div>
-      )}
-      {sections.length > 0 ? (
-        <div className="mt-3 space-y-4">
-          {sections.map(sec => (
-            <div key={sec.id}>
-              {sec.heading && <p className="mb-1 text-xs font-extrabold uppercase tracking-[0.12em]" style={sec.color ? { color: sec.color } : undefined}>{sec.heading}</p>}
-              {sec.html && <div className="chord-view" dangerouslySetInnerHTML={{ __html: sec.html }} />}
-            </div>
-          ))}
+        <SheetBody song={song} />
+      </SongEditProvider>
+    </section>
+  )
+}
+
+function SheetBody({ song }: { song: PlayableSong }) {
+  const edit = useSongEdit()
+  const locked = edit?.locked ?? true
+  return (
+    <div className="space-y-4">
+      {/* Locked: the title and artist are already shown beside the player, so only the facts. Unlocked: the fields. */}
+      {locked ? (
+        <div className="flex flex-wrap gap-2">
+          {edit?.details.song_key && <span className="inline-flex items-center rounded-full bg-hero px-3 py-1 text-xs font-bold text-hero-fg">Key of {edit.details.song_key}</span>}
+          {edit?.details.bpm && <StatusPill className="px-3 py-1 text-xs">{edit.details.bpm} BPM</StatusPill>}
+          {edit?.details.time_signature && <StatusPill className="px-3 py-1 text-xs">{edit.details.time_signature}</StatusPill>}
         </div>
       ) : (
-        !notes && <p className="mt-3 text-sm text-gray-500">No chart or notes for this song yet.</p>
+        <SongDetails />
       )}
-    </section>
+      <SongNotesCard />
+      {locked && !edit?.details.notes && edit?.canEdit && (
+        <p className="text-sm text-gray-500">No band notes yet. Unlock the song to add some.</p>
+      )}
+      <ChordViewer
+        key={song.songId}
+        chordChart={song.chordChart ?? ''}
+        songKey={song.songKey}
+        songId={song.songId}
+        songTitle={song.title}
+        bpm={song.bpm ?? null}
+        notes={song.notes}
+      />
+    </div>
   )
 }
