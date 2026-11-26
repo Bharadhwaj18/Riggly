@@ -174,8 +174,6 @@ export default async function SetlistPage({ params }: Props) {
               <SaveOfflineButton
                 setlistId={id}
                 setlistTitle={setlist.title}
-                showDate={setlist.show_date}
-                venue={setlist.venue}
                 items={setlistSongs.map(ss => ({ song: ss.song, section: (ss as SetlistSongWithSong).section }))}
               />
               <SetlistPdfExport setlist={setlist} songs={setlistSongs.map(ss => ss.song)} />

@@ -1,10 +1,12 @@
 'use client'
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { AlertCircle, Check, Loader2, Lock, LockOpen, WifiOff } from 'lucide-react'
 import { saveSongDetails } from '@/actions/songs'
 import { Button } from '@/components/ui/Button'
+import { ReasonButton } from '@/components/ui/ReasonButton'
+import { useOnline } from '@/hooks/useOnline'
 import { useToast } from '@/components/ui/Toaster'
 import { cn } from '@/lib/utils'
 import type { SongDetailsData } from '@/lib/validators'
@@ -168,17 +170,6 @@ export function SongEditProvider({ songId, canEdit, initial, children }: Props) 
   return <SongEditContext.Provider value={value}>{children}</SongEditContext.Provider>
 }
 
-function subscribeOnline(onChange: () => void) {
-  window.addEventListener('online', onChange)
-  window.addEventListener('offline', onChange)
-  return () => { window.removeEventListener('online', onChange); window.removeEventListener('offline', onChange) }
-}
-
-/** Whether the device has a connection (always true while rendering on the server). */
-export function useOnline() {
-  return useSyncExternalStore(subscribeOnline, () => navigator.onLine, () => true)
-}
-
 /** The lock button, with how saving is going while the song is unlocked. */
 export function LockToggle({ showStatus = true, className }: { showStatus?: boolean; className?: string }) {
   const edit = useSongEdit()
@@ -189,9 +180,9 @@ export function LockToggle({ showStatus = true, className }: { showStatus?: bool
   if (!online && locked) {
     return (
       <div className={cn('flex items-center gap-3', className)}>
-        <Button size="sm" variant="secondary" disabled title="Editing needs a connection">
+        <ReasonButton size="sm" variant="secondary" blocked="You’re offline. Editing needs the internet, so unlock this song once you’re back online.">
           <WifiOff className="h-4 w-4" /> Offline
-        </Button>
+        </ReasonButton>
       </div>
     )
   }

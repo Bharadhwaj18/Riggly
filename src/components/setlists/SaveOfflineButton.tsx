@@ -15,8 +15,6 @@ interface SetlistSongEntry {
 interface SaveOfflineButtonProps {
   setlistId: string
   setlistTitle: string
-  showDate?: string | null
-  venue?: string | null
   items: SetlistSongEntry[]
 }
 
