@@ -10,7 +10,7 @@ import { TextStyle, Color, BackgroundColor } from '@tiptap/extension-text-style'
 import { UndoRedo, Placeholder } from '@tiptap/extensions'
 import { Plugin, PluginKey, type EditorState } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
-import { Fragment, Slice, type Node as PMNode } from '@tiptap/pm/model'
+import { Fragment, Slice, type Node as PMNode, type Schema } from '@tiptap/pm/model'
 import { Ban, Baseline, Highlighter, Music, RemoveFormatting } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { parseLine, serializeLine, autoChordRanges, chordPartsOf, type Seg } from '@/lib/chords/line-markup'
@@ -53,6 +53,17 @@ function segsOfParagraph(node: { content?: JSONContent[] }): Seg[] {
 
 function contentToMarkup(doc: JSONContent): string {
   return (doc.content ?? []).map(p => serializeLine(segsOfParagraph(p))).join('\n')
+}
+
+/** Pasted plain text as editor lines: every line kept (blank ones too) and every space, since chords line up with spaces. */
+function plainTextSlice(text: string, schema: Schema): Slice {
+  const lines = text
+    .replace(/\r\n?/g, '\n')
+    .replace(/\t/g, '    ')
+    .replace(/[\u00a0\u2007\u202f]/g, ' ') // non-breaking spaces from web pages
+    .replace(/[\u200b\u200c\u200d\ufeff]/g, '') // invisible characters
+    .split('\n')
+  return new Slice(Fragment.from(lines.map(l => schema.nodes.paragraph.create(null, l ? schema.text(l) : null))), 1, 1)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -174,10 +185,16 @@ export function RichBlockEditor({ value, onChange, label }: Props) {
         spellcheck: 'false',
       },
       // Pasted text keeps every line, blank ones included, and every space (chords line up with spaces).
-      clipboardTextParser: (text, _context, _plain, view) => {
-        const { schema } = view.state
-        const lines = text.replace(/\r\n?/g, '\n').replace(/\t/g, '    ').split('\n')
-        return new Slice(Fragment.from(lines.map(l => schema.nodes.paragraph.create(null, l ? schema.text(l) : null))), 1, 1)
+      clipboardTextParser: (text, _context, _plain, view) => plainTextSlice(text, view.state.schema),
+      // A copy from a website (Ultimate Guitar, a chords blog…) also carries the page's HTML, and reading
+      // that squashes the spaces chords are lined up with and can join lines. Use its plain text instead.
+      // A copy from another section of this app is still pasted as is, keeping chords and colours.
+      handlePaste: (view, event) => {
+        const text = event.clipboardData?.getData('text/plain')
+        const html = event.clipboardData?.getData('text/html') ?? ''
+        if (!text || html.includes('data-pm-slice')) return false
+        view.dispatch(view.state.tr.replaceSelection(plainTextSlice(text, view.state.schema)).scrollIntoView())
+        return true
       },
     },
     onUpdate: ({ editor: e }) => onChangeRef.current(contentToMarkup(e.getJSON())),
