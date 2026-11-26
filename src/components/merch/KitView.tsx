@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Check, ChevronLeft, Minus, Pencil, Plus, RotateCcw, Trash2, Undo2, Users } from 'lucide-react'
@@ -23,6 +23,9 @@ import { AmountField } from './AmountField'
 import { ReasonButton } from '@/components/ui/ReasonButton'
 import { ItemHeading } from './ItemHeading'
 import { UpiProofLink, UpiProofPicker, proofMissing, uploadProofs, type PickedProof } from './UpiProof'
+import { changesSnapshot, enqueueChange, NO_STORAGE, parseChanges, queuedKitSold, removeChange, subscribeChanges } from '@/lib/offline-changes'
+import { keepFiles } from '@/lib/offline-files'
+import { isNetworkError } from '@/lib/offline'
 
 export interface KitLineView {
   variantId: string
@@ -267,20 +270,46 @@ function StallPanel({ kitId, lines, workspaceId, userId }: { kitId: string; line
   const [amount, setAmount] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [proofs, setProofs] = useState<PickedProof[]>([])
+  // Sales made here with no signal are still waiting to be sent: count them as sold so "left" stays right.
+  const rawQueue = useSyncExternalStore(subscribeChanges, changesSnapshot, () => '')
+  const queued = useMemo(() => queuedKitSold(parseChanges(rawQueue || null), kitId), [rawQueue, kitId])
+  const soldOf = (l: KitLineView) => l.sold + (queued[l.variantId] ?? 0)
 
   const picked = lines.filter(l => (cart[l.variantId] ?? 0) > 0)
   const total = expectedTotal(picked.map(l => ({ qty: cart[l.variantId], price: l.price })))
   const paid = amount === null ? total : Number(amount || 0)
-  const add = (l: KitLineView, d: number) => setCart(c => ({ ...c, [l.variantId]: Math.min(kitLeft(l.taken, l.sold), Math.max(0, (c[l.variantId] ?? 0) + d)) }))
+  const add = (l: KitLineView, d: number) => setCart(c => ({ ...c, [l.variantId]: Math.min(kitLeft(l.taken, soldOf(l)), Math.max(0, (c[l.variantId] ?? 0) + d)) }))
+
+  const clear = () => { setCart({}); setAmount(null); setProofs([]) }
+
+  // No signal at the stall: keep the sale (and its UPI photo) on this phone; it's sent once back online.
+  const keepForLater = async (saleLines: { variantId: string; qty: number }[]) => {
+    const photos = method === 'upi' ? proofs.map(p => p.file) : []
+    const id = enqueueChange({ kind: 'kitSale', kitId, lines: saleLines, paid: { [method]: paid }, userId, photos: photos.length }, `the ${money(paid)} sale`)
+    if (id && photos.length && !(await keepFiles(id, photos))) removeChange(id)
+    else if (id) { toast(`Sale saved on this phone: ${money(paid)}. It’s sent when you’re back online.`, 'info'); clear(); return }
+    toast(NO_STORAGE, 'error')
+  }
 
   const save = async () => {
     setBusy(true)
-    // A UPI sale's photo uploads first; the sale only saves once it's in.
-    const up = method === 'upi' ? await uploadProofs(workspaceId, userId, proofs) : { paths: [] as string[] }
-    if (up.error) { toast(up.error, 'error'); setBusy(false); return }
-    const ok = await run(() => recordKitSale(kitId, picked.map(l => ({ variantId: l.variantId, qty: cart[l.variantId] })), { [method]: paid }, null, up.paths ?? []), `Sale recorded: ${money(paid)}`)
-    setBusy(false)
-    if (ok) { setCart({}); setAmount(null); setProofs([]) }
+    const saleLines = picked.map(l => ({ variantId: l.variantId, qty: cart[l.variantId] }))
+    try {
+      if (!navigator.onLine) return await keepForLater(saleLines)
+      // A UPI sale's photo uploads first; the sale only saves once it's in.
+      const up = method === 'upi' ? await uploadProofs(workspaceId, userId, proofs) : { paths: [] as string[] }
+      if (up.error) { if (isNetworkError(up.error)) return await keepForLater(saleLines); toast(up.error, 'error'); return }
+      let res: { error?: string }
+      try {
+        res = await recordKitSale(kitId, saleLines, { [method]: paid }, null, up.paths ?? [])
+      } catch (e) {
+        if (isNetworkError(e)) return await keepForLater(saleLines)
+        throw e
+      }
+      if (await run(async () => res, `Sale recorded: ${money(paid)}`)) clear()
+    } finally {
+      setBusy(false)
+    }
   }
 
   const byItem = [...new Set(lines.map(l => l.itemName))]
@@ -294,7 +323,7 @@ function StallPanel({ kitId, lines, workspaceId, userId }: { kitId: string; line
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
             {lines.filter(l => l.itemName === name).map(l => {
               const inCart = cart[l.variantId] ?? 0
-              const left = kitLeft(l.taken, l.sold) - inCart
+              const left = kitLeft(l.taken, soldOf(l)) - inCart
               return (
                 <button key={l.variantId} type="button" aria-disabled={left <= 0} onClick={() => (left <= 0 ? toast(`No ${l.itemName} ${l.label} left in the box.`, 'info') : add(l, 1))}
                   className={cn('relative rounded-xl border px-2 py-3 text-center transition-colors active:scale-[0.97] aria-disabled:opacity-50',

@@ -4,6 +4,7 @@ import * as Toast from '@radix-ui/react-toast'
 import { X } from 'lucide-react'
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
+import { isNetworkError, OFFLINE_MESSAGE } from '@/lib/offline'
 
 type ToastType = 'success' | 'error' | 'info'
 
@@ -33,6 +34,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const addToast = useCallback((message: string, type: ToastType = 'info', action?: ToastAction) => {
     const id = crypto.randomUUID()
+    // A raw "Failed to fetch" means the change never reached the server: say so in plain words.
+    if (isNetworkError(message)) message = OFFLINE_MESSAGE
     setToasts(prev => [...prev, { id, message, type, action }])
     // Long enough to reach for "Undo".
     setTimeout(() => dismiss(id), action ? 7000 : 4000)

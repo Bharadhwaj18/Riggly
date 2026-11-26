@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { clearOfflineData } from '@/lib/offline'
 import { useRouter } from 'next/navigation'
 import { Camera, Lock, LogOut } from 'lucide-react'
 import { saveDisplayName } from '@/actions/profile'
@@ -36,6 +37,7 @@ export function ProfileSettings({ userId, name: initialName, email, avatarUrl }:
 
   const signOut = () => {
     startTransition(async () => {
+      await clearOfflineData()
       await createClient().auth.signOut()
       router.push('/login')
     })

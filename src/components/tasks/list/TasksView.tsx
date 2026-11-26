@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { ArrowRightLeft, ChevronDown, ChevronRight, ListChecks, NotebookPen, Plus, Search, Star, X } from 'lucide-react'
 import { patchTask, type TaskPatch } from '@/actions/tasks'
 import { useToast } from '@/components/ui/Toaster'
+import { sendOrQueue } from '@/lib/offline-changes'
 import { cn } from '@/lib/utils'
 import { addDaysISO, addMonthsISO } from '@/lib/dates'
 import { openCountByList, orderLists, sectionsByWhen, type TaskSection } from '@/lib/task-view'
@@ -110,7 +111,9 @@ export function TasksView(props: Props) {
     if (completing) { settle(task.id, true); window.setTimeout(() => settle(task.id, false), SETTLE_MS) }
     if (patch.progress && patch.progress !== 'completed') settle(task.id, false)
     startTransition(async () => {
-      const res = await patchTask(task.id, patch)
+      // No signal: the change stays on screen and is sent once the phone is back online.
+      const res = await sendOrQueue({ kind: 'taskPatch', taskId: task.id, patch }, `the change to “${task.title}”`, () => patchTask(task.id, patch))
+      if ('queued' in res) { toast('Saved on this phone. It’s sent when you’re back online.', 'info'); return }
       if (res.error) {
         toast(res.error, 'error')
         setPatches(prev => ({ ...prev, [task.id]: (prev[task.id] ?? []).filter(p => p !== patch) }))

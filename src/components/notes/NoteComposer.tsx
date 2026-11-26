@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useTransition } from 'react'
+import { sendOrQueue } from '@/lib/offline-changes'
 import { ListChecks, Sparkles } from 'lucide-react'
 import { createNote } from '@/actions/notes'
 import { useToast } from '@/components/ui/Toaster'
@@ -29,8 +30,10 @@ export function NoteComposer({ links, prefill, startOpen = false }: Props) {
     const data = toFormData(fields)
     setFields(emptyFields())
     startTransition(async () => {
-      const result = await createNote(data)
-      if (result.error) toast(result.error, 'error')
+      // No signal: the note is kept on this phone and added once it's back online.
+      const result = await sendOrQueue({ kind: 'noteCreate', data }, `the note “${data.title || data.content.slice(0, 30) || 'checklist'}”`, () => createNote(data))
+      if ('queued' in result) toast('Note saved on this phone. It’s added when you’re back online.', 'info')
+      else if (result.error) toast(result.error, 'error')
       else toast(data.visibility === 'shared' ? 'Note added for the workspace' : 'Note added (only you can see it)', 'success')
     })
   }

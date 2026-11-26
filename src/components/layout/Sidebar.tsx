@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { clearOfflineData } from '@/lib/offline'
 import { BrandMark } from '@/components/ui/BrandMark'
 import { Wordmark } from '@/components/ui/Wordmark'
 import { usePathname, useRouter } from 'next/navigation'
@@ -64,6 +65,7 @@ export function Sidebar({ user, pendingPaymentCount = 0, notifications = [], wor
   const supabase = createClient()
 
   const handleSignOut = async () => {
+    await clearOfflineData()
     await supabase.auth.signOut()
     router.push('/login')
   }
@@ -148,7 +150,7 @@ export function Sidebar({ user, pendingPaymentCount = 0, notifications = [], wor
   )
 
   const logo = (
-    <Link href="/" className="flex items-center gap-2.5">
+    <Link href="/" className="flex items-center gap-2.5 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-sidebar-accent">
       <BrandMark className="ring-1 ring-sidebar-border" />
       <Wordmark tone="sidebar" className="text-xl text-sidebar-strong" />
     </Link>

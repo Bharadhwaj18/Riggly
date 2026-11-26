@@ -6,7 +6,7 @@
 
 /** How the name is written in text. The logo itself is the lowercase "riggly" wordmark in components/ui/Wordmark.tsx. */
 export const APP_NAME = 'Riggly'
-export const APP_TAGLINE = 'Everything an artist runs on'
+export const APP_TAGLINE = 'A rig for every gig'
 /** Lower-case, no spaces: for file names. */
 export const APP_SLUG = 'riggly'
 export const APP_EMAIL_PLACEHOLDER = 'you@example.com'

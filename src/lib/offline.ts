@@ -2,7 +2,8 @@
 //
 // The real pages are saved, not a hand-made copy: the setlist page, the page of every song in it
 // (as reached from the setlist, so the setlist bar, previous / next and Stage mode work) and the
-// app's own code and styles. With no connection the service worker (public/sw.js) serves these,
+// app's own code and styles. Pages go in the service worker's "Save offline" cache, stamped with when they were
+// saved like its other saved pages, and files in its app-files cache. With no connection the worker (public/sw.js) serves these,
 // so the app looks and works the same: blocks, colours, transposing, text size and Stage mode.
 // Editing needs a connection, so the lock says "Offline" until it's back.
 
@@ -10,12 +11,13 @@ const LS_SETLISTS = 'tarana-offline-setlists'
 const LS_SONGS = 'tarana-offline-songs'
 const LS_USER = 'tarana-user'
 
-/** Must match public/sw.js. */
-export const PAGES_CACHE = 'tarana-offline-v1'
-export const STATIC_CACHE = 'riggly-static-v2'
+// Must match public/sw.js.
+const PAGES_CACHE = 'tarana-offline-v1'
+const ASSETS_CACHE = 'riggly-assets-v1'
+const SAVED_AT = 'x-riggly-saved-at'
 
 /** Bumped when what's saved changes, so older saves are redone when next online. */
-export const OFFLINE_VERSION = 2
+export const OFFLINE_VERSION = 3
 
 export interface OfflineMeta {
   id: string
@@ -106,8 +108,11 @@ async function savePage(cache: Cache, path: string): Promise<string | null> {
   const res = await fetch(path, { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'text/html' } })
   // A redirect means the page wasn't there for us (signed out, no access); don't keep the page it led to.
   if (!res.ok || res.redirected || !(res.headers.get('content-type') ?? '').includes('text/html')) return null
-  await cache.put(new URL(path, window.location.origin).href, res.clone())
-  return res.text()
+  const html = await res.text()
+  const headers = new Headers(res.headers)
+  headers.set(SAVED_AT, String(Date.now()))
+  await cache.put(new URL(path, window.location.origin).href, new Response(html, { status: 200, headers }))
+  return html
 }
 
 async function saveAssets(cache: Cache, urls: string[]) {
@@ -146,7 +151,7 @@ export async function saveSetlistOffline(
 ): Promise<void> {
   if (typeof caches === 'undefined') throw new Error('This browser can’t save pages for offline use')
   const pages = await caches.open(PAGES_CACHE)
-  const assets = await caches.open(STATIC_CACHE)
+  const assets = await caches.open(ASSETS_CACHE)
 
   const setlistPath = `/setlists/${setlistId}`
   const setlistHtml = await savePage(pages, setlistPath)
@@ -202,4 +207,46 @@ export async function removeSetlistOffline(setlistId: string): Promise<void> {
   const pages = await caches.open(PAGES_CACHE)
   const urls = meta?.urls ?? [`/setlists/${setlistId}`]
   await Promise.all(urls.map(p => pages.delete(new URL(p, window.location.origin).href)))
+}
+
+// ── Offline everywhere (see public/sw.js and components/offline/OfflineBar) ─────
+
+export const OFFLINE_MESSAGE = 'You’re offline. This needs the internet, so try again once you’re back online.'
+
+/** A request that never reached the server (no internet, or the server is unreachable), in any browser's wording. */
+export function isNetworkError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : typeof err === 'string' ? err : ''
+  return /failed to fetch|networkerror|load failed|network request failed|fetch failed|connection closed/i.test(message)
+}
+
+/** "just now", "12 min ago", "3 h ago", "2 days ago". */
+export function savedAgo(savedAtMs: number, nowMs: number): string {
+  const mins = Math.max(0, Math.round((nowMs - savedAtMs) / 60000))
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins} min ago`
+  const hours = Math.round(mins / 60)
+  if (hours < 24) return `${hours} h ago`
+  const days = Math.round(hours / 24)
+  return days === 1 ? '1 day ago' : `${days} days ago`
+}
+
+/**
+ * Forget everything saved for offline use on this device: saved pages, saved setlists and their lists.
+ * Called on sign-out so the next person on a shared phone doesn't see the band's data.
+ * Money entries waiting to be sent are kept; they go up next time someone from the band signs in here.
+ */
+export async function clearOfflineData(): Promise<void> {
+  try {
+    for (const key of [LS_SETLISTS, LS_SONGS, LS_USER, 'riggly.offline.warmedAt']) localStorage.removeItem(key)
+  } catch { /* private mode */ }
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return
+  const reg = await navigator.serviceWorker.getRegistration()
+  const sw = reg?.active
+  if (!sw) return
+  await new Promise<void>(resolve => {
+    const channel = new MessageChannel()
+    const done = setTimeout(resolve, 3000)
+    channel.port1.onmessage = () => { clearTimeout(done); resolve() }
+    sw.postMessage({ type: 'CLEAR' }, [channel.port2])
+  })
 }
