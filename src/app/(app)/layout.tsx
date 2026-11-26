@@ -25,6 +25,7 @@ import { getWorkspaceContext, isFinanceApprover, navHiddenSections } from '@/lib
 import { PageFade } from '@/components/layout/PageFade'
 import { PlayerProvider, PlayerSpacer } from '@/components/player/PlayerProvider'
 import { TooltipLayer } from '@/components/ui/TooltipLayer'
+import { WorkspacePaused } from '@/components/layout/WorkspacePaused'
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const supabase = await createClient()
@@ -79,6 +80,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const ctx = await getWorkspaceContext()
   const hiddenSections = ctx ? navHiddenSections(ctx.current) : []
   const inDemo = !!ctx && isDemoWorkspace(ctx.current.workspace)
+  // Paused from the admin dashboard: members see a note instead of the page (the platform admin still gets in).
+  const paused = !!ctx && ctx.current.workspace.status === 'blocked' && (await supabase.rpc('is_platform_admin')).data !== true
 
   // Opening the app on Today? Carry on in the section they were last in. Only the first page of a visit, so
   // choosing Today by hand later stays on Today.
@@ -105,7 +108,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         currentWorkspaceId={currentWorkspaceId} hiddenSections={hiddenSections} inDemo={inDemo} />
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-5xl px-4 pb-28 pt-16 sm:px-6 lg:px-8 lg:pb-8 lg:pt-8">
-          <FinanceSettingsProvider settings={financeSettings} canApprove={!!ctx && isFinanceApprover(ctx.current)} workspaceId={currentWorkspaceId}><PageFade>{children}</PageFade><PlayerSpacer />{ctx && <QuickAddMenu allowed={{ shows: ctx.current.sections.shows === 'edit', setlists: ctx.current.sections.setlists === 'edit', finance: ctx.current.sections.finance === 'edit', calendar: ctx.current.sections.calendar === 'edit', tasks: ctx.current.sections.tasks === 'edit' }} />}{ctx?.current.sections.finance === 'edit' && <OfflineEntrySync />}</FinanceSettingsProvider>
+          <FinanceSettingsProvider settings={financeSettings} canApprove={!!ctx && isFinanceApprover(ctx.current)} workspaceId={currentWorkspaceId}><PageFade>{paused && ctx ? <WorkspacePaused workspaceName={ctx.current.workspace.name} /> : children}</PageFade><PlayerSpacer />{ctx && <QuickAddMenu allowed={{ shows: ctx.current.sections.shows === 'edit', setlists: ctx.current.sections.setlists === 'edit', finance: ctx.current.sections.finance === 'edit', calendar: ctx.current.sections.calendar === 'edit', tasks: ctx.current.sections.tasks === 'edit' }} />}{ctx?.current.sections.finance === 'edit' && <OfflineEntrySync />}</FinanceSettingsProvider>
         </div>
       </main>
       <TooltipLayer />

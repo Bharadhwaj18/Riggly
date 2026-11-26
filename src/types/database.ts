@@ -1678,9 +1678,24 @@ export type Database = {
         Relationships: []
       }
       platform_settings: {
-        Row: { id: number; core_features: string[]; updated_at: string; updated_by: string | null }
-        Insert: { id?: number; core_features?: string[]; updated_at?: string; updated_by?: string | null }
-        Update: { id?: number; core_features?: string[]; updated_at?: string; updated_by?: string | null }
+        Row: { id: number; core_features: string[]; today: Json; updated_at: string; updated_by: string | null }
+        Insert: { id?: number; core_features?: string[]; today?: Json; updated_at?: string; updated_by?: string | null }
+        Update: { id?: number; core_features?: string[]; today?: Json; updated_at?: string; updated_by?: string | null }
+        Relationships: []
+      }
+      announcements: {
+        Row: {
+          id: string; title: string; body: string | null; link_url: string | null; link_label: string | null; tone: string
+          workspace_ids: string[] | null; starts_at: string; ends_at: string | null; created_at: string; created_by: string | null
+        }
+        Insert: {
+          id?: string; title: string; body?: string | null; link_url?: string | null; link_label?: string | null; tone?: string
+          workspace_ids?: string[] | null; starts_at?: string; ends_at?: string | null; created_at?: string; created_by?: string | null
+        }
+        Update: {
+          id?: string; title?: string; body?: string | null; link_url?: string | null; link_label?: string | null; tone?: string
+          workspace_ids?: string[] | null; starts_at?: string; ends_at?: string | null; created_at?: string; created_by?: string | null
+        }
         Relationships: []
       }
       merch_items: {
@@ -2171,7 +2186,36 @@ export type Database = {
         Returns: {
           id: string; name: string; type: string; kind: string | null; color: string; plan: string; status: string; created_at: string
           owner_id: string; owner_name: string | null; owner_email: string | null; members: number; features: Json; demo: boolean
+          today_off: Json; last_active: string | null
         }[]
+      }
+      admin_users: {
+        Args: Record<PropertyKey, never>
+        Returns: { id: string; email: string; name: string | null; created_at: string; last_sign_in_at: string | null; confirmed: boolean; is_admin: boolean; workspaces: Json }[]
+      }
+      admin_overview: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      admin_update_workspace: {
+        Args: { p_workspace: string; p_name: string; p_plan: string; p_status: string }
+        Returns: undefined
+      }
+      admin_delete_workspace: {
+        Args: { p_workspace: string; p_confirm_name: string }
+        Returns: undefined
+      }
+      admin_set_today: {
+        Args: { p_today: Json }
+        Returns: undefined
+      }
+      admin_set_workspace_today: {
+        Args: { p_workspace: string; p_off: string[] }
+        Returns: undefined
+      }
+      today_config: {
+        Args: { p_ws: string }
+        Returns: Json
       }
       admin_set_workspace_features: {
         Args: { p_workspace: string; p_features: Json }

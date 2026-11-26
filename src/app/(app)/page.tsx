@@ -18,6 +18,8 @@ import { infoCards, SectionTag } from '@/components/today/InfoWidgets'
 import { QuickAccess } from '@/components/today/QuickAccess'
 import { LogMoneyChip } from '@/components/finance/LogMoneyChip'
 import { packToday, spanClass, type Placed } from '@/lib/today-layout'
+import { todayConfigFrom, type TodayCardId } from '@/lib/today-config'
+import { Announcements } from '@/components/today/Announcements'
 
 const IST = 'Asia/Kolkata'
 
@@ -65,13 +67,17 @@ export default async function TodayPage() {
   // Light head-count queries for the quick-access hints (no rows are transferred).
   const ws = workspaceCtx?.current.workspace.id
   const supabase = await createClient()
-  const [songsCount, setlistsCount, recordingsCount] = ws
+  const [songsCount, setlistsCount, recordingsCount, todayRaw] = ws
     ? await Promise.all([
         canSee('songs') ? supabase.from('songs').select('id', { count: 'exact', head: true }).eq('workspace_id', ws) : null,
         canSee('setlists') ? supabase.from('setlists').select('id', { count: 'exact', head: true }).eq('workspace_id', ws) : null,
         canSee('recordings') ? supabase.from('recordings').select('id', { count: 'exact', head: true }).eq('workspace_id', ws) : null,
+        // What the admin dashboard set for Today: card text, cards switched off, announcements.
+        supabase.rpc('today_config', { p_ws: ws }),
       ])
-    : [null, null, null]
+    : [null, null, null, null]
+  const todayConfig = todayConfigFrom(todayRaw?.data ?? null)
+  const cardOn = (id: TodayCardId) => !todayConfig.off.has(id)
 
   const today = todayISO()
   const todayLabel = new Intl.DateTimeFormat('en-IN', { weekday: 'long', day: 'numeric', month: 'long', timeZone: IST }).format(new Date())
@@ -316,8 +322,11 @@ export default async function TodayPage() {
   }
 
   // App-wide cards fill whatever width is left on each row, so the screen is never half empty.
-  const fillers: Placed[] = infoCards(today).map(c => ({ id: c.id, span: 4, node: c.node }))
-  const placed = packToday(widgets, fillers)
+  // Each widget belongs to one Today card the admin dashboard can switch off.
+  const cardOf = (id: string): TodayCardId => id.startsWith('hero-') ? 'next' : id === 'owed' || id === 'owe' ? 'money' : id as TodayCardId
+  const fillers: Placed[] = infoCards(today, todayConfig.content).filter(c => cardOn(c.id as TodayCardId)).map(c => ({ id: c.id, span: 4, node: c.node }))
+  const placed = packToday(widgets.filter(w => cardOn(cardOf(w.id))), fillers)
+  const showActions = cardOn('actions') && (canLogMoney || quickActions.length > 0)
 
   return (
     <div className="space-y-6">
@@ -327,7 +336,9 @@ export default async function TodayPage() {
         {days !== null && <p className="mt-1 text-base text-gray-600">{headline(days, nextEvent?.title)}</p>}
       </header>
 
-      {(canLogMoney || quickActions.length > 0) && (
+      <Announcements items={todayConfig.announcements} />
+
+      {showActions && (
         <div data-tour="today-actions" className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
           {canLogMoney && <LogMoneyChip className={`${chipCls} border-brand-400 bg-brand-400 text-white hover:bg-brand-500`} />}
           {quickActions.map(a => (
