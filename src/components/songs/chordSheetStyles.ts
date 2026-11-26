@@ -10,7 +10,12 @@ const THEME_OVERRIDES = `
 .chord-view, .rich-chart { --chord-color: var(--color-brand-400); }
 .dark .chord-view, .dark .rich-chart { --chord-color: var(--color-brand-600); }
 .chord-view { color: var(--color-gray-900); }
-.chord-view .chord-sheet { font-size: var(--chord-size, 14px); }
+.chord-view .chord-sheet { font-size: var(--chord-size, 14px); line-height: 1.55; }
+/* Compact sections: no gap after a section's last line, smaller gaps between its paragraphs, and no
+   empty chord row above a lyric line that has no chords. */
+.chord-view .paragraph { margin-bottom: 0.75rem; }
+.chord-view .paragraph:last-child, .chord-view .chart-section:last-child, .chord-view .inline-line:last-child { margin-bottom: 0; }
+.chord-view .row:not(:has(.chord:not(:empty))) .chord { display: none; }
 .chord-view .chord, .chord-view .ichord { color: var(--chord-color); }
 .chord-view .comment { color: var(--color-gray-500); }
 .chord-view .section-label { color: var(--color-gray-500); }

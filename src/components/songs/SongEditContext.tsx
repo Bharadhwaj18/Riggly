@@ -2,9 +2,11 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { AlertCircle, Check, Loader2, Lock, LockOpen } from 'lucide-react'
+import { AlertCircle, Check, Loader2, Lock, LockOpen, WifiOff } from 'lucide-react'
 import { saveSongDetails } from '@/actions/songs'
 import { Button } from '@/components/ui/Button'
+import { ReasonButton } from '@/components/ui/ReasonButton'
+import { useOnline } from '@/hooks/useOnline'
 import { useToast } from '@/components/ui/Toaster'
 import { cn } from '@/lib/utils'
 import type { SongDetailsData } from '@/lib/validators'
@@ -171,8 +173,19 @@ export function SongEditProvider({ songId, canEdit, initial, children }: Props) 
 /** The lock button, with how saving is going while the song is unlocked. */
 export function LockToggle({ showStatus = true, className }: { showStatus?: boolean; className?: string }) {
   const edit = useSongEdit()
+  const online = useOnline()
   if (!edit?.canEdit) return null
   const { locked, unlock, lock } = edit
+  // Changes can't be saved without a connection (a saved offline copy is read-only), so editing waits.
+  if (!online && locked) {
+    return (
+      <div className={cn('flex items-center gap-3', className)}>
+        <ReasonButton size="sm" variant="secondary" blocked="You’re offline. Editing needs the internet, so unlock this song once you’re back online.">
+          <WifiOff className="h-4 w-4" /> Offline
+        </ReasonButton>
+      </div>
+    )
+  }
   return (
     <div className={cn('flex items-center gap-3', className)}>
       <Button

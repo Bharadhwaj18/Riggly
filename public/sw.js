@@ -9,10 +9,14 @@
 //   last copy. (Next.js would otherwise wait for the internet to come back.)
 // - The app asks the worker to refresh key pages in the background while online (WARM), so pages you haven't
 //   opened lately are ready too.
+// - "Save offline" on a setlist (src/lib/offline.ts) keeps the setlist and its songs' pages in their own cache
+//   (CACHE_NAME), so the last-copy limit never pushes them out. They're used the same way as last copies.
+// - A song page saved from its setlist is found however its address is spelled (an encoded "from", "&stage=1").
 // - Pages nobody has saved fall back to /offline.html, which lists what is saved.
 // - Signing out clears it all (CLEAR).
 
-const CACHE_NAME = 'tarana-offline-v1' // setlists saved with the "Save offline" button
+// Cache names must match src/lib/offline.ts.
+const CACHE_NAME = 'tarana-offline-v1' // setlists and their songs saved with the "Save offline" button
 const PAGES = 'riggly-pages-v1'
 const ASSETS = 'riggly-assets-v1'
 const OFFLINE_PAGE = '/offline.html'
@@ -47,12 +51,17 @@ self.addEventListener('install', event => {
 
 self.addEventListener('activate', event => event.waitUntil(clients.claim()))
 
-async function savePage(key, res) {
+/** A copy of a page response, stamped with when it was saved. */
+async function stamped(res) {
   const body = await res.clone().text()
   const headers = new Headers(res.headers)
   headers.set(SAVED_AT, String(Date.now()))
+  return new Response(body, { status: 200, headers })
+}
+
+async function savePage(key, res) {
   const cache = await caches.open(PAGES)
-  await cache.put(key, new Response(body, { status: 200, headers }))
+  await cache.put(key, res.headers.has(SAVED_AT) ? res.clone() : await stamped(res))
   const keys = await cache.keys()
   for (let i = 0; i < keys.length - MAX_PAGES; i++) await cache.delete(keys[i])
 }
@@ -61,23 +70,43 @@ function isSaveableHtml(res) {
   return res && res.ok && res.type === 'basic' && !res.redirected && (res.headers.get('content-type') || '').includes('text/html')
 }
 
+/**
+ * The saved copy of a page: the last copy, or one kept with "Save offline". A song or setlist page saved under a
+ * slightly different address still counts: same page, then the same "from" setlist, then the same Stage mode.
+ */
+async function findSaved(key) {
+  const caches2 = [await caches.open(PAGES), await caches.open(CACHE_NAME)]
+  for (const cache of caches2) {
+    const hit = await cache.match(key, { ignoreVary: true })
+    if (hit) return hit
+  }
+  const url = new URL(key)
+  if (!/^\/(songs|setlists)\/[^/]+$/.test(url.pathname)) return null
+  let best = null
+  let bestScore = -1
+  for (const cache of caches2) {
+    for (const req of await cache.keys()) {
+      const k = new URL(req.url)
+      if (k.pathname !== url.pathname) continue
+      const score = (k.searchParams.get('from') === url.searchParams.get('from') ? 2 : 0)
+        + (k.searchParams.get('stage') === url.searchParams.get('stage') ? 1 : 0)
+      if (score > bestScore) { best = { cache, req }; bestScore = score }
+    }
+  }
+  return best ? best.cache.match(best.req, { ignoreVary: true }) : null
+}
+
 /** The saved copy of a page, with a note added so the page can say how old it is. */
 async function savedCopy(key) {
-  const cache = await caches.open(PAGES)
-  const hit = await cache.match(key, { ignoreVary: true })
+  const hit = await findSaved(key)
   if (!hit) return null
   const savedAt = hit.headers.get(SAVED_AT) || ''
   const html = (await hit.text()).replace('</head>', `<script>window.__RIGGLY_SAVED_AT=${JSON.stringify(savedAt)}</script></head>`)
   return new Response(html, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } })
 }
 
-async function offlineFallback(url) {
+async function offlineFallback() {
   const setlists = await caches.open(CACHE_NAME)
-  // A setlist saved with the "Save offline" button.
-  if (/^\/setlists\/[^/]+$/.test(url.pathname)) {
-    const saved = await setlists.match(url.origin + url.pathname)
-    if (saved) return saved
-  }
   return (await setlists.match(OFFLINE_PAGE)) || new Response('Offline', { status: 503 })
 }
 
@@ -93,13 +122,21 @@ async function handleNavigation(event, url) {
   const network = fetch(event.request)
   if (keepable(url)) {
     // Keep the fresh copy even if the saved one was shown because the server was slow.
-    event.waitUntil(network.then(res => (isSaveableHtml(res) ? savePage(key, res) : null)).catch(() => {}))
+    event.waitUntil(network.then(async res => {
+      if (!isSaveableHtml(res)) return
+      const copy = await stamped(res) // read now, before the page uses up the response
+      await savePage(key, copy)
+      // A page kept with "Save offline" is kept up to date as well.
+      const pinned = await caches.open(CACHE_NAME)
+      if (await pinned.match(key, { ignoreVary: true })) await pinned.put(key, copy.clone())
+    }).catch(() => {}))
   }
   try {
-    const hasCopy = keepable(url) && (await caches.open(PAGES).then(c => c.match(key, { ignoreVary: true })))
+    const hasCopy = keepable(url) && ((await caches.match(key, { cacheName: PAGES, ignoreVary: true }))
+      || (await caches.match(key, { cacheName: CACHE_NAME, ignoreVary: true })))
     return await (hasCopy ? withTimeout(network, SLOW_NETWORK_MS) : network)
   } catch {
-    return (await savedCopy(key)) || (await offlineFallback(url))
+    return (await savedCopy(key)) || (await offlineFallback())
   }
 }
 
@@ -195,23 +232,6 @@ async function clearAll() {
 self.addEventListener('message', event => {
   const data = event.data
   if (!data) return
-
-  if (data.type === 'CACHE_SETLIST') {
-    event.waitUntil(
-      caches.open(CACHE_NAME).then(cache => {
-        const res = new Response(data.html, {
-          headers: { 'Content-Type': 'text/html; charset=utf-8' },
-        })
-        return cache.put(data.url, res)
-      })
-    )
-  }
-
-  if (data.type === 'REMOVE_SETLIST') {
-    event.waitUntil(
-      caches.open(CACHE_NAME).then(cache => cache.delete(data.url))
-    )
-  }
 
   if (data.type === 'WARM' && Array.isArray(data.urls)) {
     event.waitUntil(warm(data.urls, typeof data.maxAgeMs === 'number' ? data.maxAgeMs : 30 * 60 * 1000))

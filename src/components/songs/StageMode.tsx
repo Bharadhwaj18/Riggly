@@ -1,20 +1,21 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import {
-  ChevronLeft, ChevronRight, ListMusic, Minus, Pause, Pencil, Play, Plus, RotateCcw, Save,
-  SlidersHorizontal, StickyNote, X, ArrowDownToLine, ArrowRight, Moon, Sun,
+  ChevronLeft, ChevronRight, ListMusic, Minus, Pencil, Plus, RotateCcw, Save,
+  SlidersHorizontal, StickyNote, X, ArrowDownToLine, Moon, Sun, ZoomIn, ZoomOut,
 } from 'lucide-react'
 import { useFullscreen } from '@/hooks/useFullscreen'
-import { useAutoScroll } from '@/hooks/useAutoScroll'
 import { useSwipe } from '@/lib/use-swipe'
 import { parseSong } from '@/lib/chords/parser'
 import { formatSongAsChordPro } from '@/lib/chords/formatter'
 import { transposeSong, transposeKey } from '@/lib/chords/transposer'
 import { getStageChordSheetCss } from '@/lib/chords/theme'
-import { renderChartHtml } from '@/lib/chords/render'
+import { renderBlockHtml } from '@/lib/chords/render'
+import { chordProToDoc, blockToChordPro, colorFor, SECTION_COLORS } from '@/lib/chords/blocks'
+import { paginateSections, pageOf, mergeHeadingOnlySections, type MeasuredSection, type StageSlice } from '@/lib/stage-pages'
 import { ensureChordSheetCss } from './chordSheetStyles'
 import { saveTranspose } from '@/actions/songs'
 import { reorderSetlistSongs } from '@/actions/setlists'
@@ -46,8 +47,16 @@ type Sheet = null | 'tools' | 'list' | 'edit'
 const CSS_ID = 'stage-sheet-css'
 const FONT_MIN = 14
 const FONT_MAX = 48
-const SPEED_BASE = 40
+/** Space between section cards, and above / below each page, in px (matches gap-3 / py-4). */
+const CARD_GAP = 12
+const PAGE_PAD_Y = 16
+// Zoom (text size) is kept on this phone only, for each song: a song with long lines can be zoomed out without
+// changing the others, and each band member's own phone keeps their own. A song never zoomed uses the last size set.
 const PREF_FONT = 'stage-font-size'
+const songFontKey = (songId: string) => `stage-font-size:${songId}`
+const validFont = (v: string) => { const n = Number(v); return n >= FONT_MIN && n <= FONT_MAX ? n : null }
+const readFont = (songId: string | undefined) =>
+  readPref(songId ? songFontKey(songId) : PREF_FONT, readPref(PREF_FONT, 26, validFont), validFont)
 const PREF_THEME = 'stage-theme'
 
 // Fixed palettes, deliberately independent of the app's light/dark theme.
@@ -64,6 +73,16 @@ const PALETTES: Record<StageTheme, React.CSSProperties> = {
   } as React.CSSProperties,
 }
 
+// Inside a card: tighter lines, no gap after the last line, and no empty chord row above a lyric line
+// without chords, so more of the song fits on each page.
+const STAGE_CARD_CSS = `
+.stage-sheet .chord-sheet { line-height: 1.6; }
+.stage-sheet .paragraph { margin-bottom: 0.8em; }
+.stage-sheet .chart-section { margin-bottom: 0; }
+.stage-sheet .paragraph:last-child, .stage-sheet .inline-line:last-child { margin-bottom: 0; }
+.stage-sheet .row:not(:has(.chord:not(:empty))) .chord { display: none; }
+`
+
 const readPref = <T,>(key: string, fallback: T, parse: (v: string) => T | null): T => {
   try {
     const v = localStorage.getItem(key)
@@ -74,6 +93,7 @@ const writePref = (key: string, value: string) => { try { localStorage.setItem(k
 
 const btn = 'flex items-center justify-center rounded-xl transition-colors active:scale-[0.97] disabled:opacity-30'
 const iconBtn = cn(btn, 'h-12 w-12 text-[var(--stage-text)] hover:bg-[var(--stage-raised)]')
+const zoomBtn = cn(btn, 'h-12 w-10 shrink-0 text-[var(--stage-text)] hover:bg-[var(--stage-raised)] sm:w-12')
 
 /**
  * One full-screen mode for playing live: the chart big and readable, the next song one tap or swipe
@@ -89,25 +109,46 @@ export function StageMode({ songs: initialSongs, startSongId, setlistId, setlist
   const [idx, setIdx] = useState(() => Math.max(0, initialSongs.findIndex(s => s.id === startSongId)))
   const [semitones, setSemitones] = useState(0)
   const [theme, setTheme] = useState<StageTheme>(() => readPref<StageTheme>(PREF_THEME, 'dark', v => (v === 'light' || v === 'dark' ? v : null)))
-  const [fontSize, setFontSize] = useState(() => readPref(PREF_FONT, 26, v => { const n = Number(v); return n >= FONT_MIN && n <= FONT_MAX ? n : null }))
+  const [fontSize, setFontSize] = useState(() => readFont(initialSongs[Math.max(0, initialSongs.findIndex(s => s.id === startSongId))]?.id))
   const [sheet, setSheet] = useState<Sheet>(null)
-  const [barsVisible, setBarsVisible] = useState(true)
-  const [atEnd, setAtEnd] = useState(false)
+  // Pages that each fit the screen (the sections, or parts of a long one, on each), and the one showing.
+  const [pages, setPages] = useState<StageSlice[][]>([])
+  const [page, setPage] = useState(0)
+  const [layoutTick, setLayoutTick] = useState(0)
   const [draft, setDraft] = useState('')
   const [saving, startSaving] = useTransition()
 
   const rootRef = useRef<HTMLDivElement>(null)
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const areaRef = useRef<HTMLDivElement>(null)
+  const measureRef = useRef<HTMLDivElement>(null)
+  /** The spot to keep on screen when pages are worked out again (text size, rotation, transpose). */
+  const anchor = useRef({ section: 0, offset: 0 })
+  /** Arriving from the next song with Previous: open on this song's last page. */
+  const openOnLast = useRef(false)
   const { enter, exit } = useFullscreen(rootRef)
-  const { isScrolling, setIsScrolling, speed, setSpeed, resetScroll } = useAutoScroll(scrollRef)
 
   const song = songs[idx]
   const total = songs.length
   const prev = idx > 0 ? songs[idx - 1] : null
   const next = idx < total - 1 ? songs[idx + 1] : null
   const currentKey = semitones === 0 ? song.song_key : transposeKey(song.song_key, semitones)
-  const html = useMemo(() => renderChartHtml(song.chord_chart, semitones), [song.chord_chart, semitones])
+  // The song's sections as cards, the same blocks (names, colours) as on the song page.
+  const sections = useMemo(() => {
+    const doc = chordProToDoc(song.chord_chart)
+    // A heading with nothing under it joins the unnamed section after it, so they're one card.
+    return mergeHeadingOnlySections(doc.blocks
+      .map(block => {
+        const body = blockToChordPro(block, { withHeading: false })
+        const color = colorFor(doc, block.heading)
+        return {
+          id: block.id,
+          heading: block.heading.trim(),
+          color: color ? SECTION_COLORS[color] : undefined,
+          html: body.trim() ? renderBlockHtml(body, semitones) : '',
+        }
+      })
+      .filter(s => s.heading || s.html))
+  }, [song.chord_chart, semitones])
 
   // Mount: portal target, fullscreen, keep the screen awake.
   useEffect(() => {
@@ -131,48 +172,81 @@ export function StageMode({ songs: initialSongs, startSongId, setlistId, setlist
   useEffect(() => {
     let el = document.getElementById(CSS_ID)
     if (!el) { el = document.createElement('style'); el.id = CSS_ID; document.head.appendChild(el) }
-    el.textContent = getStageChordSheetCss(fontSize)
+    el.textContent = getStageChordSheetCss(fontSize) + STAGE_CARD_CSS
   }, [fontSize])
 
-  // Bars stay up unless the chart is scrolling by itself; then they fade after a moment.
-  const pokeBars = useCallback(() => {
-    setBarsVisible(true)
-    if (hideTimer.current) clearTimeout(hideTimer.current)
-    if (isScrolling) hideTimer.current = setTimeout(() => setBarsVisible(false), 3000)
-  }, [isScrolling])
+  // Re-measure when the screen or the measured cards change size (rotation, fonts loading).
   useEffect(() => {
-    if (hideTimer.current) clearTimeout(hideTimer.current)
-    if (isScrolling) hideTimer.current = setTimeout(() => setBarsVisible(false), 3000)
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    else setBarsVisible(true)
-    return () => { if (hideTimer.current) clearTimeout(hideTimer.current) }
-  }, [isScrolling])
+    if (!mounted) return
+    const ro = new ResizeObserver(() => setLayoutTick(t => t + 1))
+    if (areaRef.current) ro.observe(areaRef.current)
+    if (measureRef.current) ro.observe(measureRef.current)
+    return () => ro.disconnect()
+  }, [mounted])
 
-  const goTo = useCallback((i: number) => {
+  // Work out the pages from the cards' real heights (measured off-screen) and the space available.
+  useLayoutEffect(() => {
+    const area = areaRef.current
+    const measure = measureRef.current
+    if (!area || !measure) return
+    const measured = Array.from(measure.children, (c, i): MeasuredSection => measureCard(c as HTMLElement, !!sections[i]?.heading && !sections[i]?.html))
+    const available = area.clientHeight - PAGE_PAD_Y * 2
+    const next = paginateSections(measured, available, CARD_GAP)
+    const target = openOnLast.current ? Math.max(0, next.length - 1) : pageOf(next, anchor.current.section, anchor.current.offset)
+    openOnLast.current = false
+    // Remember where we landed, so a second measurement (cards settling, fonts loading) stays put.
+    const top = next[target]?.[0]
+    anchor.current = { section: top?.section ?? 0, offset: top?.start ?? 0 }
+    // Measuring the DOM is reading an external system, so the result is stored after layout.
+    setPages(prev => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next))
+    setPage(target)
+  }, [sections, fontSize, layoutTick, mounted])
+
+  const goTo = useCallback((i: number, onLastPage = false) => {
     if (i < 0 || i >= songs.length) return
     setDir(i > idx ? 1 : -1)
     setIdx(i)
     setSemitones(0)
-    setAtEnd(false)
-    resetScroll()
+    setFontSize(readFont(songs[i]?.id))
+    anchor.current = { section: 0, offset: 0 }
+    openOnLast.current = onLastPage
+    setPage(0)
     setSheet(null)
-    setBarsVisible(true)
-  }, [songs.length, resetScroll, idx])
+  }, [songs, idx])
+
+  const pageCount = Math.max(1, pages.length)
+  const onFirstPage = page <= 0
+  const onLastPage = page >= pageCount - 1
+  const showPage = useCallback((n: number, direction: number) => {
+    setDir(direction)
+    setPage(n)
+    const top = pages[n]?.[0]
+    anchor.current = { section: top?.section ?? 0, offset: top?.start ?? 0 }
+  }, [pages])
+  /** Next page, or the next song from the last page. */
+  const nextPage = useCallback(() => {
+    if (!onLastPage) showPage(page + 1, 1)
+    else goTo(idx + 1)
+  }, [onLastPage, showPage, page, goTo, idx])
+  /** Previous page, or the previous song's last page from the first page. */
+  const prevPage = useCallback(() => {
+    if (!onFirstPage) showPage(page - 1, -1)
+    else goTo(idx - 1, true)
+  }, [onFirstPage, showPage, page, goTo, idx])
 
   const close = useCallback(async () => {
     await exit()
     onClose()
   }, [exit, onClose])
 
-  const changeFont = (delta: number) => setFontSize(f => {
-    const n = Math.min(FONT_MAX, Math.max(FONT_MIN, f + delta))
+  /** Zoom in (more text size, less on each page) or out (more on each page), remembered for this song. */
+  const changeFont = (delta: number) => {
+    const n = Math.min(FONT_MAX, Math.max(FONT_MIN, fontSize + delta))
+    if (n === fontSize) { toast(delta > 0 ? 'That’s as big as the text goes.' : 'That’s as small as the text goes.', 'info'); return }
+    setFontSize(n)
+    writePref(songFontKey(song.id), String(n))
     writePref(PREF_FONT, String(n))
-    return n
-  })
-  const changeSpeed = (deltaPct: number) => setSpeed(s => {
-    const pct = Math.min(300, Math.max(20, Math.round((s / SPEED_BASE) * 100) + deltaPct))
-    return (SPEED_BASE * pct) / 100
-  })
+  }
   const changeTheme = (t: StageTheme) => { setTheme(t); writePref(PREF_THEME, t) }
 
   // Keyboard and Bluetooth page-turner pedals (which send arrows or Page Up/Down).
@@ -180,9 +254,8 @@ export function StageMode({ songs: initialSongs, startSongId, setlistId, setlist
     const onKey = (e: KeyboardEvent) => {
       if (sheet === 'edit' || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
       switch (e.key) {
-        case ' ': e.preventDefault(); setIsScrolling(!isScrolling); break
-        case 'ArrowRight': case 'PageDown': e.preventDefault(); goTo(idx + 1); break
-        case 'ArrowLeft': case 'PageUp': e.preventDefault(); goTo(idx - 1); break
+        case ' ': case 'ArrowRight': case 'ArrowDown': case 'PageDown': e.preventDefault(); nextPage(); break
+        case 'ArrowLeft': case 'ArrowUp': case 'PageUp': e.preventDefault(); prevPage(); break
         case 'Escape': if (sheet) setSheet(null); else close(); break
         case '+': case '=': setSemitones(n => n + 1); break
         case '-': setSemitones(n => n - 1); break
@@ -190,14 +263,16 @@ export function StageMode({ songs: initialSongs, startSongId, setlistId, setlist
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [sheet, isScrolling, setIsScrolling, idx, goTo, close])
+  }, [sheet, nextPage, prevPage, close])
 
-  const swipe = useSwipe(() => goTo(idx + 1), () => goTo(idx - 1))
+  const swipe = useSwipe(nextPage, prevPage)
 
-  const onScroll = () => {
-    const el = scrollRef.current
-    if (!el) return
-    setAtEnd(el.scrollHeight > el.clientHeight + 40 && el.scrollTop + el.clientHeight >= el.scrollHeight - 80)
+  // Tapping the left or right third of the chart turns the page too (handy mid-song).
+  const onAreaClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = (e.clientX - rect.left) / rect.width
+    if (x < 1 / 3) prevPage()
+    else if (x > 2 / 3) nextPage()
   }
 
   // ---- Last-minute changes -------------------------------------------------------------
@@ -217,7 +292,6 @@ export function StageMode({ songs: initialSongs, startSongId, setlistId, setlist
   const openEditor = () => {
     setDraft(semitones === 0 ? song.chord_chart : formatSongAsChordPro(transposeSong(parseSong(song.chord_chart), semitones)))
     setSheet('edit')
-    setIsScrolling(false)
   }
   const saveEdit = () => {
     startSaving(async () => {
@@ -251,16 +325,16 @@ export function StageMode({ songs: initialSongs, startSongId, setlistId, setlist
 
   if (!mounted) return null
 
-  const speedPct = Math.round((speed / SPEED_BASE) * 100)
+  const pageSlices = (pages[page] ?? []).filter(sl => sections[sl.section])
+  const nextTop = !onLastPage ? pages[page + 1]?.[0] : undefined
+  const nextPageHeading = nextTop ? sections[nextTop.section]?.heading : undefined
 
   return createPortal(
     <div ref={rootRef} style={PALETTES[theme]}
-      className="fixed inset-0 z-[200] flex flex-col bg-[var(--stage-bg)] text-[var(--stage-text)]"
-      onPointerDown={pokeBars}>
+      className="fixed inset-0 z-[200] flex flex-col bg-[var(--stage-bg)] text-[var(--stage-text)]">
 
       {/* Top bar */}
-      <header className={cn('flex shrink-0 items-center gap-1 border-b border-[var(--stage-line)] bg-[var(--stage-surface)] px-2 py-2 transition-all duration-300 sm:px-3',
-        !barsVisible && '-mt-16 opacity-0')}>
+      <header className="flex shrink-0 items-center gap-1 border-b border-[var(--stage-line)] bg-[var(--stage-surface)] px-2 py-2 sm:px-3">
         <button type="button" onClick={close} aria-label="Leave stage mode" title="Leave (Esc)" className={iconBtn}><X className="h-6 w-6" /></button>
         <div className="min-w-0 flex-1 px-1">
           <h1 className="truncate text-lg font-bold leading-tight sm:text-xl">{song.title}</h1>
@@ -278,63 +352,59 @@ export function StageMode({ songs: initialSongs, startSongId, setlistId, setlist
           <button type="button" onClick={() => setSheet('tools')} aria-label="Band notes" title="Band notes" className={iconBtn}><StickyNote className="h-5 w-5" /></button>
         )}
         {total > 1 && <button type="button" onClick={() => setSheet('list')} aria-label="Running order" title="Running order" className={iconBtn}><ListMusic className="h-6 w-6" /></button>}
+        <button type="button" onClick={() => changeFont(-2)} aria-label="Zoom out" title="Zoom out: more on each page" className={zoomBtn}><ZoomOut className="h-6 w-6" /></button>
+        <button type="button" onClick={() => changeFont(2)} aria-label="Zoom in" title="Zoom in: bigger text" className={zoomBtn}><ZoomIn className="h-6 w-6" /></button>
         <button type="button" onClick={() => setSheet('tools')} aria-label="Tools" title="Key, text size and more" className={iconBtn}><SlidersHorizontal className="h-6 w-6" /></button>
       </header>
 
-      {/* The chart */}
-      <div ref={scrollRef} onScroll={onScroll} {...swipe} className="stage-sheet relative flex-1 overflow-y-auto overscroll-contain">
+      {/* The chart: one screen-sized page of section cards at a time, no scrolling. */}
+      <div ref={areaRef} {...swipe} onClick={onAreaClick} className="stage-sheet relative min-h-0 flex-1 overflow-hidden">
         {song.chord_chart.trim() ? (
-          <div key={idx} className={cn('mx-auto max-w-4xl px-5 pb-48 pt-6 sm:px-10', dir > 0 ? 'animate-step-in' : 'animate-step-back')} dangerouslySetInnerHTML={{ __html: html }} />
+          <>
+            {/* Every card, measured off-screen at the real width and text size, to work out the pages. */}
+            <div ref={measureRef} aria-hidden className="pointer-events-none invisible absolute inset-x-0 top-0 mx-auto max-w-4xl px-4 sm:px-8">
+              {sections.map(s => <StageCard key={s.id} section={s} fontSize={fontSize} />)}
+            </div>
+            <div key={`${idx}-${page}`}
+              className={cn('mx-auto flex h-full max-w-4xl flex-col gap-3 px-4 py-4 sm:px-8', dir > 0 ? 'animate-step-in' : 'animate-step-back')}>
+              {pageSlices.map(sl => <StageCard key={`${sections[sl.section].id}-${sl.start}`} section={sections[sl.section]} fontSize={fontSize} slice={sl} />)}
+            </div>
+          </>
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-[var(--stage-muted)]">
             <p className="text-lg">No chart for this song yet.</p>
-            <button type="button" onClick={openEditor} className="rounded-xl bg-[var(--stage-accent)] px-5 py-3 font-bold text-[var(--stage-accent-fg)]">Add it now</button>
+            <button type="button" onClick={e => { e.stopPropagation(); openEditor() }} className="rounded-xl bg-[var(--stage-accent)] px-5 py-3 font-bold text-[var(--stage-accent-fg)]">Add it now</button>
           </div>
         )}
       </div>
 
-      {/* Up next, once the end of the chart is reached */}
-      {next && atEnd && sheet === null && (
-        <button type="button" onClick={() => goTo(idx + 1)}
-          className="absolute inset-x-4 bottom-28 mx-auto flex max-w-md items-center justify-between gap-3 rounded-2xl bg-[var(--stage-accent)] px-5 py-4 text-left text-[var(--stage-accent-fg)] shadow-2xl sm:bottom-32">
-          <span className="min-w-0">
-            <span className="block text-xs font-bold uppercase tracking-[0.12em] opacity-75">Up next</span>
-            <span className="block truncate text-xl font-extrabold">{next.title}</span>
-          </span>
-          <ArrowRight className="h-7 w-7 shrink-0" />
-        </button>
-      )}
-
-      {/* Bottom bar */}
-      <footer className={cn('absolute inset-x-0 bottom-0 border-t border-[var(--stage-line)] bg-[var(--stage-surface)] px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 transition-all duration-300 sm:px-4',
-        !barsVisible && 'pointer-events-none translate-y-full opacity-0')}>
+      {/* Turn the page: big buttons, and on the last page Next moves on to the next song. */}
+      <footer className="shrink-0 border-t border-[var(--stage-line)] bg-[var(--stage-surface)] px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 sm:px-4">
         <div className="mx-auto flex max-w-5xl items-center gap-2">
-          <button type="button" onClick={() => goTo(idx - 1)} disabled={!prev} aria-label="Previous song"
-            className={cn(btn, 'h-14 min-w-14 gap-2 bg-[var(--stage-raised)] px-3 text-[var(--stage-text)] sm:min-w-44 sm:justify-start')}>
+          <button type="button" onClick={prevPage} disabled={onFirstPage && !prev} aria-label={onFirstPage && prev ? `Previous song: ${prev.title}` : 'Previous page'}
+            className={cn(btn, 'h-16 min-w-0 flex-1 gap-2 bg-[var(--stage-raised)] px-3 text-[var(--stage-text)]')}>
             <ChevronLeft className="h-7 w-7 shrink-0" />
-            <span className="hidden min-w-0 truncate text-sm font-semibold sm:block">{prev?.title}</span>
+            <span className="min-w-0 truncate text-left text-sm font-bold">
+              {onFirstPage && prev ? <><span className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--stage-muted)]">Previous song</span>{prev.title}</> : 'Previous'}
+            </span>
           </button>
 
-          <div className="flex flex-1 items-center justify-center gap-1">
-            <button type="button" onClick={() => changeSpeed(-10)} aria-label="Scroll slower" className={cn(btn, 'h-14 w-11 text-[var(--stage-text)] hover:bg-[var(--stage-raised)]')}><Minus className="h-5 w-5" /></button>
-            <button type="button" onClick={() => setIsScrolling(!isScrolling)}
-              className={cn(btn, 'h-14 min-w-28 gap-2 bg-[var(--stage-accent)] px-4 text-base font-extrabold text-[var(--stage-accent-fg)]')}>
-              {isScrolling ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6" />}
-              <span className="flex flex-col items-start leading-none">
-                <span>{isScrolling ? 'Pause' : 'Scroll'}</span>
-                <span className="mt-0.5 text-[11px] font-bold opacity-75">{speedPct}%</span>
-              </span>
-            </button>
-            <button type="button" onClick={() => changeSpeed(10)} aria-label="Scroll faster" className={cn(btn, 'h-14 w-11 text-[var(--stage-text)] hover:bg-[var(--stage-raised)]')}><Plus className="h-5 w-5" /></button>
+          <div className="w-16 shrink-0 text-center" aria-live="polite">
+            <p className="text-xl font-extrabold leading-none">{page + 1}<span className="text-[var(--stage-muted)]">/{pageCount}</span></p>
+            <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--stage-muted)]">Page</p>
           </div>
 
-          <button type="button" onClick={() => goTo(idx + 1)} disabled={!next} aria-label="Next song"
-            className={cn(btn, 'h-14 min-w-14 gap-2 bg-[var(--stage-raised)] px-3 text-[var(--stage-text)] sm:min-w-44 sm:justify-end')}>
-            <span className="hidden min-w-0 truncate text-sm font-semibold sm:block">{next?.title}</span>
+          <button type="button" onClick={nextPage} disabled={onLastPage && !next} aria-label={onLastPage && next ? `Next song: ${next.title}` : 'Next page'}
+            className={cn(btn, 'h-16 min-w-0 flex-[1.4] gap-2 bg-[var(--stage-accent)] px-3 text-[var(--stage-accent-fg)]')}>
+            <span className="min-w-0 truncate text-right text-sm font-extrabold">
+              {onLastPage && next
+                ? <><span className="block text-[11px] font-bold uppercase tracking-[0.1em] opacity-75">Next song</span>{next.title}</>
+                : <>{'Next'}{nextPageHeading && <span className="block text-[11px] font-bold uppercase tracking-[0.1em] opacity-75">{nextPageHeading}</span>}</>}
+            </span>
             <ChevronRight className="h-7 w-7 shrink-0" />
           </button>
         </div>
-        <p className="mt-1.5 hidden text-center text-[11px] text-[var(--stage-muted)] lg:block">Space scroll · ← → or pedal to change song · + − key · Esc leave</p>
+        <p className="mt-1.5 hidden text-center text-[11px] text-[var(--stage-muted)] lg:block">← → , Space or a pedal turn pages · tap the sides of the chart · + − key · Esc leave</p>
       </footer>
 
       {/* Sheets */}
@@ -369,12 +439,8 @@ export function StageMode({ songs: initialSongs, startSongId, setlistId, setlist
                   </div>
                 )}
 
-                <ToolRow label="Text size">
+                <ToolRow label="Text size" hint="For this song, on this phone">
                   <Stepper onMinus={() => changeFont(-2)} onPlus={() => changeFont(2)} value={<>{fontSize}</>} minusLabel="A−" plusLabel="A+" />
-                </ToolRow>
-
-                <ToolRow label="Scroll speed">
-                  <Stepper onMinus={() => changeSpeed(-10)} onPlus={() => changeSpeed(10)} value={<>{speedPct}%</>} />
                 </ToolRow>
 
                 <ToolRow label="Display">
@@ -390,7 +456,7 @@ export function StageMode({ songs: initialSongs, startSongId, setlistId, setlist
 
                 <div className="grid grid-cols-2 gap-2 border-t border-[var(--stage-line)] pt-4">
                   <button type="button" onClick={openEditor} className={cn(btn, 'h-12 gap-2 bg-[var(--stage-raised)] font-bold')}><Pencil className="h-4 w-4" /> Edit this chart</button>
-                  <button type="button" onClick={() => { resetScroll(); setSheet(null) }} className={cn(btn, 'h-12 gap-2 bg-[var(--stage-raised)] font-bold')}><ArrowDownToLine className="h-4 w-4 rotate-180" /> Back to top</button>
+                  <button type="button" onClick={() => { showPage(0, -1); setSheet(null) }} className={cn(btn, 'h-12 gap-2 bg-[var(--stage-raised)] font-bold')}><ArrowDownToLine className="h-4 w-4 rotate-180" /> First page</button>
                 </div>
               </div>
             )}
@@ -445,6 +511,59 @@ export function StageMode({ songs: initialSongs, startSongId, setlistId, setlist
       )}
     </div>,
     document.body
+  )
+}
+
+interface StageSection { id: string; heading: string; color?: string; html: string }
+
+/**
+ * A card's size for working out the pages: its heading and padding, its lines, and where a page may start inside
+ * it. A page may start at any line, except words right under a line of chords alone (they go over together).
+ */
+function measureCard(card: HTMLElement, keepWithNext: boolean): MeasuredSection {
+  const lines = card.querySelector<HTMLElement>('[data-stage-lines]')
+  const cardHeight = card.getBoundingClientRect().height
+  if (!lines) return { header: cardHeight, content: 0, breaks: [], keepWithNext }
+  const box = lines.getBoundingClientRect()
+  const breaks: number[] = []
+  let afterChordsOnly = false
+  for (const el of lines.querySelectorAll<HTMLElement>('.row, .inline-line, .line-gap')) {
+    const hasWords = el.classList.contains('row') && !!(el.querySelector('.lyrics')?.textContent ?? '').trim()
+    const y = Math.round(el.getBoundingClientRect().top - box.top)
+    // Words stay with the line of chords just above them. (Lines of chords one after another may still be split.)
+    const keptWithAbove = afterChordsOnly && hasWords
+    if (!keptWithAbove && y > 0 && y < box.height && y !== breaks[breaks.length - 1]) breaks.push(y)
+    // A line of chords alone: a row with no words, or a chords line shown inline ("VERSE - F# E C#").
+    afterChordsOnly = el.classList.contains('inline-line') || (el.classList.contains('row') && !hasWords)
+  }
+  return { header: cardHeight - box.height, content: box.height, breaks: [0, ...breaks], keepWithNext }
+}
+
+/**
+ * One section as a card, like on the song page, in Stage mode's own colours. With `slice`, only those of its lines
+ * show (a long section cut across pages), and a part after the first says it carries on.
+ */
+function StageCard({ section, fontSize, slice }: { section: StageSection; fontSize: number; slice?: StageSlice }) {
+  const continued = !!slice && slice.start > 0
+  return (
+    <section
+      className="shrink-0 rounded-xl border border-[var(--stage-line)] bg-[var(--stage-surface)] px-4 py-3 sm:px-5"
+      style={section.color ? { borderLeftColor: section.color, borderLeftWidth: 5 } : undefined}
+    >
+      {section.heading && (
+        <h3 className="mb-1 truncate font-extrabold uppercase tracking-[0.14em]"
+          style={{ color: section.color ?? 'var(--stage-section)', fontSize: Math.max(11, Math.round(fontSize * 0.45)) }}>
+          {section.heading}{continued && <span className="opacity-60"> · cont.</span>}
+        </h3>
+      )}
+      {section.html && (
+        <div className="overflow-hidden" style={slice ? { height: slice.end - slice.start } : undefined}>
+          {/* flow-root: the lines' own margins stay inside, so measured offsets match what's shown. */}
+          <div data-stage-lines className="flow-root" style={slice ? { marginTop: -slice.start } : undefined}
+            dangerouslySetInnerHTML={{ __html: section.html }} />
+        </div>
+      )}
+    </section>
   )
 }
 

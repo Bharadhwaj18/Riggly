@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useEffect, useState } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { CloudOff, RefreshCw } from 'lucide-react'
 import { savedAgo, isNetworkError, OFFLINE_MESSAGE } from '@/lib/offline'
 import { useToast } from '@/components/ui/Toaster'
+import { useOnline } from '@/hooks/useOnline'
 
 declare global {
   interface Window { __RIGGLY_SAVED_AT?: string }
@@ -12,12 +13,6 @@ declare global {
 
 const WARMED_KEY = 'riggly.offline.warmedAt'
 const WARM_EVERY_MS = 30 * 60 * 1000
-
-function subscribe(onChange: () => void) {
-  window.addEventListener('online', onChange)
-  window.addEventListener('offline', onChange)
-  return () => { window.removeEventListener('online', onChange); window.removeEventListener('offline', onChange) }
-}
 
 async function worker() {
   if (!('serviceWorker' in navigator)) return null
@@ -33,7 +28,7 @@ async function worker() {
  * - anything that needed the internet and failed shows "You're offline..." instead of a raw error.
  */
 export function OfflineBar() {
-  const online = useSyncExternalStore(subscribe, () => navigator.onLine, () => true)
+  const online = useOnline()
   const [savedAt] = useState(() => (typeof window !== 'undefined' && window.__RIGGLY_SAVED_AT ? Number(window.__RIGGLY_SAVED_AT) : null))
   const [now, setNow] = useState(() => Date.now())
   const toast = useToast()

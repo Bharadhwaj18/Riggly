@@ -71,25 +71,35 @@
   async function load() {
     var box = document.getElementById('lists')
     var pages = []
-    try {
-      var cache = await caches.open('riggly-pages-v1')
-      var reqs = await cache.keys()
-      for (var i = 0; i < reqs.length; i++) {
-        var url = new URL(reqs[i].url)
-        if (url.origin !== location.origin) continue
-        var res = await cache.match(reqs[i])
-        var html = await res.text()
-        // A page's own heading names it best (a setlist's title, a song's name...).
-        var h1 = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)
-        pages.push({ path: url.pathname + url.search, parts: url.pathname.split('/').filter(Boolean), title: h1 ? text(h1[1]).slice(0, 80) : '', savedAt: Number(res.headers.get('x-riggly-saved-at') || 0) })
-      }
-    } catch (e) { /* no cache access */ }
+    // Last copies of pages opened, and setlists (with their songs) kept with "Save offline". One entry per
+    // page: a song saved from two setlists is listed once, with its newest copy.
+    var byPage = {}
+    var names = ['riggly-pages-v1', 'tarana-offline-v1']
+    for (var n = 0; n < names.length; n++) {
+      try {
+        var cache = await caches.open(names[n])
+        var reqs = await cache.keys()
+        for (var i = 0; i < reqs.length; i++) {
+          var url = new URL(reqs[i].url)
+          if (url.origin !== location.origin || url.pathname === '/offline.html') continue
+          var res = await cache.match(reqs[i])
+          var savedAt = Number(res.headers.get('x-riggly-saved-at') || 0)
+          var seen = byPage[url.pathname]
+          if (seen && seen.savedAt >= savedAt) continue
+          var html = await res.text()
+          // A page's own heading names it best (a setlist's title, a song's name...).
+          var h1 = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)
+          byPage[url.pathname] = { path: url.pathname + url.search, parts: url.pathname.split('/').filter(Boolean), title: h1 ? text(h1[1]).slice(0, 80) : '', savedAt: savedAt }
+        }
+      } catch (e) { /* no cache access */ }
+    }
+    Object.keys(byPage).forEach(function (k) { pages.push(byPage[k]) })
 
     // Setlists kept with the "Save offline" button.
     try {
       JSON.parse(localStorage.getItem('tarana-offline-setlists') || '[]').forEach(function (s) {
         var path = '/setlists/' + s.id
-        if (!pages.some(function (p) { return p.path === path })) pages.push({ path: path, parts: ['setlists', s.id], title: s.title, savedAt: Date.parse(s.savedAt) || 0 })
+        if (!pages.some(function (p) { return p.parts[0] === 'setlists' && p.parts[1] === s.id })) pages.push({ path: path, parts: ['setlists', s.id], title: s.title, savedAt: Date.parse(s.savedAt) || 0 })
       })
     } catch (e) { /* ignore */ }
 

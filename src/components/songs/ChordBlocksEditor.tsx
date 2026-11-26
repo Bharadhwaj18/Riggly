@@ -58,7 +58,7 @@ export function ChordBlocksEditor({ blocks, onChange, colors, onColorChange }: P
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <datalist id={`${listId}-names`}>
         {SECTION_NAMES.map(n => <option key={n} value={n} />)}
       </datalist>
@@ -86,14 +86,14 @@ export function ChordBlocksEditor({ blocks, onChange, colors, onColorChange }: P
       <button
         type="button"
         onClick={add}
-        className="flex w-full items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-brand-200 py-3 text-sm font-bold text-gray-500 hover:border-brand-400 hover:text-gray-800"
+        className="flex w-full items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-brand-200 py-2 text-sm font-bold text-gray-500 hover:border-brand-400 hover:text-gray-800"
       >
         <Plus className="h-4 w-4" /> Add section
       </button>
 
       <p className="px-1 text-xs leading-relaxed text-gray-400">
         Chords on their own line above the words, or after a dash or colon (VERSE - F# E C#), are picked up
-        by themselves and turn the chord colour. For anything else, select it and tap Chord.
+        by themselves and turn the chord colour. Tap into a section for the Chord, colour and highlight tools.
       </p>
     </div>
   )
@@ -112,7 +112,7 @@ interface CardProps {
   onRemove: () => void
 }
 
-const iconButton = 'flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30 disabled:hover:bg-transparent'
+const iconButton = 'flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30 disabled:hover:bg-transparent'
 
 function BlockCard({ block, index, count, namesListId, color, onColor, onChange, onMove, onDuplicate, onRemove }: CardProps) {
   const [picking, setPicking] = useState(false)
@@ -128,17 +128,17 @@ function BlockCard({ block, index, count, namesListId, color, onColor, onChange,
         ...(color ? { borderLeftColor: SECTION_COLORS[color], borderLeftWidth: 5 } : {}),
       }}
       className={cn(
-        'rounded-2xl border border-brand-200 bg-white focus-within:border-brand-400',
+        'rounded-xl border border-brand-200 bg-white focus-within:border-brand-400',
         isDragging && 'drag-lifted relative z-10 opacity-90 ring-2 ring-brand-400',
       )}
     >
-      <div className="flex items-center gap-1 border-b border-brand-100 px-2 py-1.5">
+      <div className="flex items-center gap-0.5 border-b border-brand-100 px-1.5 py-0.5">
         <button
           ref={setActivatorNodeRef}
           type="button"
           {...attributes}
           {...listeners}
-          className="flex h-8 w-7 cursor-grab touch-none items-center justify-center text-gray-300 hover:text-gray-600 active:cursor-grabbing"
+          className="flex h-7 w-6 cursor-grab touch-none items-center justify-center text-gray-300 hover:text-gray-600 active:cursor-grabbing"
           aria-label="Drag to move this section"
         >
           <GripVertical className="h-5 w-5" />
