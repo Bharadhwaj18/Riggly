@@ -12,7 +12,6 @@ import { toPlayable, type PlayableReference } from '@/lib/song-references'
 import { SongReferences } from '@/components/references/SongReferences'
 import { Cover } from '@/components/references/Cover'
 import { ServiceMark } from '@/components/references/ServiceMark'
-import { availableSearchSources } from '@/lib/reference-lookup'
 import { SOURCE_NAMES } from '@/lib/song-references'
 import { ChordViewer } from '@/components/songs/ChordViewer'
 import { SongEditProvider, LockToggle } from '@/components/songs/SongEditContext'
@@ -179,7 +178,7 @@ export default async function SongPage({ params, searchParams }: Props) {
         />
 
         <aside className="contents lg:block lg:space-y-4">
-          <div className="order-first lg:order-none"><SongReferences songId={id} references={references} canEdit={canEditSongs} searchSources={availableSearchSources()} /></div>
+          <div className="order-first lg:order-none"><SongReferences songId={id} references={references} canEdit={canEditSongs} songTitle={song.title} songArtist={song.artist} /></div>
           <SongNotesCard />
 
           <div className="mb-6"><LinkedNotes songId={id} /></div>

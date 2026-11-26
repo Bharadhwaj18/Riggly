@@ -161,8 +161,23 @@ async function searchYouTube(query: string): Promise<SearchResult[] | null> {
   })
 }
 
+// Opening a song's References searches YouTube for it, so remember answers for an hour: reopening the same
+// song, or a bandmate doing so, doesn't spend more of the daily allowance.
+const CACHE_MS = 60 * 60 * 1000
+const CACHE_MAX = 200
+const searchCache = new Map<string, { at: number; results: SearchResult[] }>()
+
 export async function searchSource(source: SearchSource, query: string): Promise<SearchResult[] | null> {
-  return source === 'spotify' ? searchSpotify(query) : searchYouTube(query)
+  if (source === 'spotify') return searchSpotify(query)
+  const key = query.trim().toLowerCase()
+  const hit = searchCache.get(key)
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.results
+  const results = await searchYouTube(query)
+  if (results) {
+    if (searchCache.size >= CACHE_MAX) searchCache.delete(searchCache.keys().next().value!)
+    searchCache.set(key, { at: Date.now(), results })
+  }
+  return results
 }
 
 // ---------------- link lookup ----------------
