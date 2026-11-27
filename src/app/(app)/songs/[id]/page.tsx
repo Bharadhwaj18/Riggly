@@ -8,7 +8,8 @@ import { getCachedSong, getCachedSetlist, getCachedAllProfiles, getCachedSetlist
 import { SongViews, type NoteView } from '@/components/groups/SongViews'
 import { getWorkspaceContext } from '@/lib/workspace'
 import { canEditItem } from '@/lib/access'
-import { toPlayable, type PlayableReference } from '@/lib/song-references'
+import { canPlayInApp, toPlayable, type PlayableReference } from '@/lib/song-references'
+import { RehearseSongButton } from '@/components/references/Rehearse'
 import { SongReferences } from '@/components/references/SongReferences'
 import { Cover } from '@/components/references/Cover'
 import { ServiceMark } from '@/components/references/ServiceMark'
@@ -66,6 +67,8 @@ export default async function SongPage({ params, searchParams }: Props) {
   const canEditSongs = !!ctx && canEditItem(ctx.current.sections.songs, ctx.current.grants ?? [], 'songs', id)
   // The reference the cover art came from, linked under the title (Spotify requires a link back for its artwork).
   const coverFrom = song.cover_url ? references.find(r => r.thumbnailUrl === song.cover_url) : undefined
+  // Rehearse plays the first reference the app can play itself, the same one the setlist's Rehearse uses.
+  const rehearseRef = references.find(r => canPlayInApp(r.source)) ?? null
 
   const taggedRecordings = (recordings as RecordingWithSong[]).filter(r => r.song_id === id)
 
@@ -135,6 +138,14 @@ export default async function SongPage({ params, searchParams }: Props) {
         <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
           {/* On a phone the lock sits on the chart bar just below, so it isn't shown twice. */}
           <LockToggle showStatus={false} className="hidden sm:flex" />
+          {rehearseRef && (
+            <RehearseSongButton song={{
+              songId: id, title: song.title, artist: song.artist ?? null, songKey: song.song_key ?? null,
+              coverUrl: song.cover_url ?? null, coverLink: coverFrom ? { source: coverFrom.source, url: coverFrom.url } : null,
+              reference: rehearseRef, chordChart: song.chord_chart ?? null, notes: song.notes ?? null,
+              bpm: song.bpm ?? null, timeSignature: song.time_signature ?? null, canEdit: canEditSongs,
+            }} />
+          )}
           <SongPdfExport song={song} />
           <Button variant="secondary" size="sm" asChild>
             <Link href={editHref}><Pencil className="h-4 w-4" /> Edit details</Link>

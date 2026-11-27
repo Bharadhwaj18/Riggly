@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useRouter } from 'next/navigation'
+import { Button } from '@/components/ui/Button'
 import { ChevronDown, ExternalLink, Headphones, Pause, Play, SkipBack, SkipForward } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SOURCE_NAMES, formatTime, type PlayableSong } from '@/lib/song-references'
@@ -45,7 +47,26 @@ export function RehearseCard({ songs }: { songs: PlayableSong[] }) {
   )
 }
 
+/**
+ * Rehearse one song, from its own page: the same player beside the song's notes and chart, without the set around it.
+ * Shown only when the song has a reference the app can play itself.
+ */
+export function RehearseSongButton({ song }: { song: PlayableSong }) {
+  const [open, setOpen] = useState(false)
+  const { close } = usePlayer()
+  const router = useRouter()
+  if (!song.reference) return null
+  return (
+    <>
+      <Button size="sm" onClick={() => { close(); setOpen(true) }}><Headphones className="h-4 w-4" />Rehearse</Button>
+      {/* Edits made while rehearsing (chart, notes, details) show on the page once it closes. */}
+      {open && <RehearseView songs={[song]} onClose={() => { setOpen(false); router.refresh() }} />}
+    </>
+  )
+}
+
 function RehearseView({ songs, onClose }: { songs: PlayableSong[]; onClose: () => void }) {
+  const single = songs.length === 1
   const firstPlayable = songs.findIndex(s => s.reference)
   const [index, setIndex] = useState(firstPlayable)
   // Only after the first song has been started by hand do later songs try to start on their own.
@@ -81,7 +102,7 @@ function RehearseView({ songs, onClose }: { songs: PlayableSong[]; onClose: () =
         <button type="button" onClick={onClose} aria-label="Close rehearsal" className="flex h-11 w-11 items-center justify-center rounded-xl text-gray-600 hover:bg-brand-100">
           <ChevronDown className="h-6 w-6" />
         </button>
-        <span className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-gray-500">Rehearsing · {index + 1} of {songs.length}</span>
+        <span className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-gray-500">{single ? 'Rehearsing' : `Rehearsing · ${index + 1} of ${songs.length}`}</span>
         <span className="w-11" />
       </div>
 
@@ -107,14 +128,14 @@ function RehearseView({ songs, onClose }: { songs: PlayableSong[]; onClose: () =
         <EmbedPlayer key={ref.id} ref={player} reference={ref} autoPlay={started} onEnded={() => { setStarted(true); step(1) }} onPlayingChange={setPlaying} />
 
         <div className="flex items-center justify-center gap-6">
-          <button type="button" onClick={() => step(-1)} disabled={prevPlayable < 0} aria-label="Previous song"
-            className="flex h-12 w-12 items-center justify-center rounded-full text-gray-800 hover:bg-brand-100 disabled:opacity-30"><SkipBack className="h-6 w-6" /></button>
+          {!single && <button type="button" onClick={() => step(-1)} disabled={prevPlayable < 0} aria-label="Previous song"
+            className="flex h-12 w-12 items-center justify-center rounded-full text-gray-800 hover:bg-brand-100 disabled:opacity-30"><SkipBack className="h-6 w-6" /></button>}
           <button type="button" onClick={() => { setStarted(true); player.current?.toggle() }} aria-label={playing ? 'Pause' : 'Play'}
             className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-600 text-white shadow-md transition-transform hover:bg-brand-700 active:scale-95">
             {playing ? <Pause className="h-7 w-7" fill="currentColor" /> : <Play className="h-7 w-7 translate-x-0.5" fill="currentColor" />}
           </button>
-          <button type="button" onClick={() => { setStarted(true); step(1) }} disabled={nextPlayable < 0} aria-label="Next song"
-            className="flex h-12 w-12 items-center justify-center rounded-full text-gray-800 hover:bg-brand-100 disabled:opacity-30"><SkipForward className="h-6 w-6" /></button>
+          {!single && <button type="button" onClick={() => { setStarted(true); step(1) }} disabled={nextPlayable < 0} aria-label="Next song"
+            className="flex h-12 w-12 items-center justify-center rounded-full text-gray-800 hover:bg-brand-100 disabled:opacity-30"><SkipForward className="h-6 w-6" /></button>}
         </div>
 
         {ref.moments.length > 0 && (
@@ -132,7 +153,7 @@ function RehearseView({ songs, onClose }: { songs: PlayableSong[]; onClose: () =
 
         <SongSheet key={song.songId} song={song} />
 
-        <div className="border-t border-brand-200 pt-2 lg:col-start-1">
+        {!single && <div className="border-t border-brand-200 pt-2 lg:col-start-1">
           <p className="px-1 pb-1 text-[11px] font-extrabold uppercase tracking-[0.12em] text-gray-500">Up next</p>
           {songs.slice(index + 1).map((s, offset) => {
             const i = index + 1 + offset
@@ -151,7 +172,7 @@ function RehearseView({ songs, onClose }: { songs: PlayableSong[]; onClose: () =
             )
           })}
           {index === songs.length - 1 && <p className="px-1 py-3 text-sm text-gray-500">That’s the last song in the set.</p>}
-        </div>
+        </div>}
       </div>
     </div>,
     document.body,
