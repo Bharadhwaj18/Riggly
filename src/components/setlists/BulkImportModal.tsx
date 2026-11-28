@@ -65,9 +65,24 @@ export function BulkImportModal({ setlistId, existingSongs, currentSongTitles }:
     return map
   }, [parsed])
 
-  const newSongCount = parsed.filter(
-    s => !existingTitleSet.has(normalizeTitle(s.title))
-  ).length
+  // The library song a title looks like (spelled differently, or a typo off), preferring one with a chart. Exact matches need none.
+  const similarTo = useMemo(() => {
+    const out = new Map<string, Song>()
+    for (const s of parsed) {
+      const key = normalizeTitle(s.title)
+      if (existingTitleSet.has(key) || out.has(key)) continue
+      const best = findSimilar(s.title, existingSongs).sort((a, b) => Number(!!b.song.chord_chart) - Number(!!a.song.chord_chart))[0]
+      if (best) out.set(key, best.song)
+    }
+    return out
+  }, [parsed, existingSongs, existingTitleSet])
+
+  // Only songs with nothing in the library, exact or similar, will be created.
+  const newSongCount = parsed.filter(s => {
+    const key = normalizeTitle(s.title)
+    return !existingTitleSet.has(key) && !similarTo.has(key)
+  }).length
+  const similarCount = parsed.filter(s => similarTo.has(normalizeTitle(s.title))).length
 
   const alreadyInSetlistCount = parsed.filter(
     s => currentTitleSet.has(normalizeTitle(s.title))
@@ -155,7 +170,7 @@ export function BulkImportModal({ setlistId, existingSongs, currentSongTitles }:
         title={step === 'input' ? 'Bulk Import Songs' : `Match ${unmatched.length} unmatched song${unmatched.length !== 1 ? 's' : ''}`}
         description={
           step === 'input'
-            ? 'Paste a setlist, numbered or not. Songs are auto-created in the library if they don\'t exist.'
+            ? 'Paste a setlist, numbered or not. Songs already in your library are reused; only ones with no match are created.'
             : 'Songs that look like ones you already have are matched for you. Check each one, change it, or choose to create a new song.'
         }
         className="max-w-2xl"
@@ -203,6 +218,9 @@ export function BulkImportModal({ setlistId, existingSongs, currentSongTitles }:
                       +{newSongCount} new to library
                     </span>
                   )}
+                  {similarCount > 0 && (
+                    <span className="text-brand-600">{similarCount} look like songs you have. You’ll check them next.</span>
+                  )}
                   {alreadyInSetlistCount > 0 && (
                     <span className="flex items-center gap-1 text-brand-500">
                       <AlertCircle className="h-3 w-3" />
@@ -220,7 +238,8 @@ export function BulkImportModal({ setlistId, existingSongs, currentSongTitles }:
                       <div className="space-y-1">
                         {songs.map((song, i) => {
                           const key = normalizeTitle(song.title)
-                          const isNew = !existingTitleSet.has(key)
+                          const inLibrary = existingTitleSet.has(key)
+                          const similar = similarTo.get(key)
                           const inSetlist = currentTitleSet.has(key)
                           return (
                             <div
@@ -239,7 +258,13 @@ export function BulkImportModal({ setlistId, existingSongs, currentSongTitles }:
                                     {song.song_key}
                                   </span>
                                 )}
-                                {isNew && !inSetlist && (
+                                {!inSetlist && inLibrary && <span className="text-xs text-gray-400">in library</span>}
+                                {!inSetlist && !inLibrary && similar && (
+                                  <span className="max-w-[10rem] truncate rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800" title={`Looks like ${similar.title}`}>
+                                    looks like {similar.title}
+                                  </span>
+                                )}
+                                {!inSetlist && !inLibrary && !similar && (
                                   <span className="rounded-full bg-brand-200 px-1.5 py-0.5 text-xs font-medium text-brand-700">new</span>
                                 )}
                                 {inSetlist && <span className="text-xs text-gray-400">skip</span>}
@@ -267,7 +292,9 @@ export function BulkImportModal({ setlistId, existingSongs, currentSongTitles }:
                 loading={isPending}
                 disabled={parsed.length === 0 || parsed.length === alreadyInSetlistCount}
               >
-                Import {parsed.length > 0 ? `${parsed.length - alreadyInSetlistCount} songs` : ''}
+                {parsed.length > 0
+                  ? `Add ${parsed.length - alreadyInSetlistCount} song${parsed.length - alreadyInSetlistCount !== 1 ? 's' : ''} to this setlist`
+                  : 'Import'}
               </Button>
             </div>
           </div>
