@@ -87,7 +87,7 @@ function ItemForm({ item, workspaceId, onDone }: { item: MerchItem | null; works
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      <MerchPhotoField value={photo} onChange={setPhoto} />
+      <MerchPhotoField value={photo} onChange={setPhoto} itemId={item?.id ?? null} />
       <Field label="Name" htmlFor="merch-name">
         <Input id="merch-name" value={name} onChange={e => setName(e.target.value)} placeholder="Logo tee" maxLength={80} required autoFocus />
       </Field>

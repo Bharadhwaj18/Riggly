@@ -51,3 +51,21 @@ export async function callWebsite(path: string, body: unknown): Promise<{ ok: tr
     return { ok: false, error: 'Couldn’t reach the website. Try again in a minute.' }
   }
 }
+
+/** Asks the website for something (a read, nothing changes there), signed with the same shared secret. */
+export async function getFromWebsite(path: string): Promise<{ ok: true; data: Record<string, unknown> } | { ok: false; error: string }> {
+  const { key, websiteUrl } = storeConfig()
+  if (!key || !websiteUrl) return { ok: false, error: 'The website link isn’t set up.' }
+  try {
+    const res = await fetch(`${websiteUrl}${path}`, {
+      headers: { Authorization: `Bearer ${key}` },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(15_000),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) return { ok: false, error: data?.error || `The website said no (${res.status}).` }
+    return { ok: true, data }
+  } catch {
+    return { ok: false, error: 'Couldn’t reach the website. Try again in a minute.' }
+  }
+}
