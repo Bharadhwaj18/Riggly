@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cleanMoments, formatTime, parseReferenceLink, parseTime, titleFromAppleLink } from './song-references'
+import { cleanMoments, firstReferenceBySong, formatTime, parseReferenceLink, parseTime, playableReferencesBySong, titleFromAppleLink, type ReferenceRow } from './song-references'
 
 describe('parseReferenceLink', () => {
   it('reads Spotify track links in their usual shapes', () => {
@@ -85,5 +85,24 @@ describe('isoDurationMs (YouTube durations)', () => {
     expect(isoDurationMs('PT1H2M5S')).toBe(3725000)
     expect(isoDurationMs('PT45S')).toBe(45000)
     expect(isoDurationMs('P1D')).toBeNull()
+  })
+})
+
+describe('playableReferencesBySong', () => {
+  const row = (id: string, song_id: string, source: string): ReferenceRow => ({
+    id, song_id, source, url: `https://example.com/${id}`, external_id: id, label: id, title: null, artist: null, thumbnail_url: null, moments: [],
+  })
+
+  it('keeps every playable reference of a song, in order, and drops the ones the app cannot play', () => {
+    const rows = [row('a', 's1', 'youtube'), row('b', 's1', 'apple'), row('c', 's1', 'spotify'), row('d', 's2', 'youtube'), row('e', 's3', 'nope')]
+    const out = playableReferencesBySong(rows)
+    expect(out.s1.map(r => r.id)).toEqual(['a', 'c'])
+    expect(out.s2.map(r => r.id)).toEqual(['d'])
+    expect(out.s3).toBeUndefined()
+  })
+
+  it('starts each song on the same reference as firstReferenceBySong', () => {
+    const rows = [row('a', 's1', 'apple'), row('b', 's1', 'youtube'), row('c', 's1', 'spotify')]
+    expect(playableReferencesBySong(rows).s1[0].id).toBe(firstReferenceBySong(rows).s1.id)
   })
 })

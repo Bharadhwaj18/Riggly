@@ -43,7 +43,10 @@ export interface PlayableSong {
   coverUrl: string | null
   /** Where the cover came from, so it can link back to it (Spotify requires that for its artwork). */
   coverLink?: CoverLink | null
+  /** The reference Rehearse starts on: the song's first one the app can play. */
   reference: PlayableReference | null
+  /** All of the song's playable references, so Rehearse can switch between them. Empty or missing: just `reference`. */
+  references?: PlayableReference[]
   /** The song’s chord chart (ChordPro) and band notes, shown beside the player while rehearsing. */
   chordChart?: string | null
   notes?: string | null
@@ -166,6 +169,16 @@ export function firstReferenceBySong(rows: ReferenceRow[]): Record<string, Playa
     if (out[row.song_id]) continue
     const p = toPlayable(row)
     if (p && canPlayInApp(p.source)) out[row.song_id] = p
+  }
+  return out
+}
+
+/** Every reference the app can play itself, per song, in the order the band put them (rows come ordered by position). */
+export function playableReferencesBySong(rows: ReferenceRow[]): Record<string, PlayableReference[]> {
+  const out: Record<string, PlayableReference[]> = {}
+  for (const row of rows) {
+    const p = toPlayable(row)
+    if (p && canPlayInApp(p.source)) (out[row.song_id] ??= []).push(p)
   }
   return out
 }

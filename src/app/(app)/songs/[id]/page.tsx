@@ -142,7 +142,7 @@ export default async function SongPage({ params, searchParams }: Props) {
             <RehearseSongButton song={{
               songId: id, title: song.title, artist: song.artist ?? null, songKey: song.song_key ?? null,
               coverUrl: song.cover_url ?? null, coverLink: coverFrom ? { source: coverFrom.source, url: coverFrom.url } : null,
-              reference: rehearseRef, chordChart: song.chord_chart ?? null, notes: song.notes ?? null,
+              reference: rehearseRef, references: references.filter(r => canPlayInApp(r.source)), chordChart: song.chord_chart ?? null, notes: song.notes ?? null,
               bpm: song.bpm ?? null, timeSignature: song.time_signature ?? null, canEdit: canEditSongs,
             }} />
           )}

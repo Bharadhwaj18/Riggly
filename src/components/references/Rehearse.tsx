@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
-import { ChevronDown, ExternalLink, Headphones, Pause, Play, SkipBack, SkipForward } from 'lucide-react'
+import { ChevronDown, ExternalLink, Headphones, Pause, Play, Repeat, SkipBack, SkipForward } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SOURCE_NAMES, formatTime, type PlayableSong } from '@/lib/song-references'
 import { usePlayer } from '@/components/player/PlayerProvider'
@@ -74,8 +74,20 @@ function RehearseView({ songs, onClose }: { songs: PlayableSong[]; onClose: () =
   const [activeMoment, setActiveMoment] = useState<number | null>(null)
   const [playing, setPlaying] = useState(false)
   const player = useRef<EmbedHandle>(null)
+  // Which reference the band picked for a song while rehearsing. Anything not picked plays its first one.
+  const [picked, setPicked] = useState<Record<string, string>>({})
   const song = songs[index]
-  const ref = song?.reference
+  const versionsOf = (s: PlayableSong) => s.references?.length ? s.references : s.reference ? [s.reference] : []
+  const refOf = (s: PlayableSong) => versionsOf(s).find(r => r.id === picked[s.songId]) ?? s.reference
+  const ref = song ? refOf(song) : null
+  const versions = song ? versionsOf(song) : []
+
+  const pickVersion = (id: string) => { setPicked(p => ({ ...p, [song.songId]: id })); setActiveMoment(null); setPlaying(false) }
+  /** Next version of this song, wrapping round to the first. */
+  const cycleVersion = () => {
+    const at = versions.findIndex(r => r.id === ref?.id)
+    pickVersion(versions[(at + 1) % versions.length].id)
+  }
 
   const step = (dir: 1 | -1) => {
     for (let i = index + dir; i >= 0 && i < songs.length; i += dir) {
@@ -106,7 +118,7 @@ function RehearseView({ songs, onClose }: { songs: PlayableSong[]; onClose: () =
         <span className="w-11" />
       </div>
 
-      {/* A phone stacks the player, then the song’s notes and chart, then Up next. A wide screen puts the song beside the player. */}
+      {/* A phone stacks the player, then the song’s notes and chart, then the set. A wide screen puts the song beside the player. */}
       <div className="mx-auto grid w-full max-w-6xl min-h-0 flex-1 content-start gap-4 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))] lg:grid-cols-[minmax(0,34rem)_minmax(0,1fr)] lg:gap-x-8">
         <div className="flex flex-col gap-4 lg:col-start-1">
         <div key={song.songId} className="animate-fade-up flex items-center gap-4">
@@ -126,6 +138,21 @@ function RehearseView({ songs, onClose }: { songs: PlayableSong[]; onClose: () =
         </div>
 
         <EmbedPlayer key={ref.id} ref={player} reference={ref} autoPlay={started} onEnded={() => { setStarted(true); step(1) }} onPlayingChange={setPlaying} />
+
+        {versions.length > 1 && (
+          <div role="group" aria-label="Which reference to play" className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+              {versions.map(r => (
+                <button key={r.id} type="button" aria-pressed={r.id === ref.id} onClick={() => { setStarted(true); pickVersion(r.id) }}
+                  className={cn('inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-full px-3 text-sm font-extrabold', r.id === ref.id ? 'bg-brand-600 text-white' : 'bg-brand-100 text-gray-800 hover:bg-brand-200')}>
+                  <ServiceMark source={r.source} size={14} /><span className="truncate">{r.label}</span>
+                </button>
+              ))}
+            </div>
+            <button type="button" onClick={() => { setStarted(true); cycleVersion() }} aria-label="Play the next reference" title="Next reference"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-700 hover:bg-brand-100"><Repeat className="h-4 w-4" /></button>
+          </div>
+        )}
 
         <div className="flex items-center justify-center gap-6">
           {!single && <button type="button" onClick={() => step(-1)} disabled={prevPlayable < 0} aria-label="Previous song"
@@ -154,24 +181,27 @@ function RehearseView({ songs, onClose }: { songs: PlayableSong[]; onClose: () =
         <SongSheet key={song.songId} song={song} />
 
         {!single && <div className="border-t border-brand-200 pt-2 lg:col-start-1">
-          <p className="px-1 pb-1 text-[11px] font-extrabold uppercase tracking-[0.12em] text-gray-500">Up next</p>
-          {songs.slice(index + 1).map((s, offset) => {
-            const i = index + 1 + offset
+          {/* The whole set, so a song that has played can be picked again. */}
+          <p className="px-1 pb-1 text-[11px] font-extrabold uppercase tracking-[0.12em] text-gray-500">The set</p>
+          {songs.map((s, i) => {
+            const r = refOf(s)
+            const now = i === index
             return (
-              <button key={`${s.songId}-${i}`} type="button" disabled={!s.reference} onClick={() => { setIndex(i); setActiveMoment(null); setPlaying(false) }}
-                className="flex min-h-14 w-full items-center gap-3 rounded-xl px-1 text-left hover:bg-brand-100 disabled:opacity-50 disabled:hover:bg-transparent">
+              <button key={`${s.songId}-${i}`} type="button" disabled={!r} aria-current={now ? 'true' : undefined}
+                onClick={() => { setIndex(i); setActiveMoment(null); setPlaying(false) }}
+                className={cn('flex min-h-14 w-full items-center gap-3 rounded-xl px-1 text-left disabled:opacity-50 disabled:hover:bg-transparent', now ? 'bg-brand-100' : 'hover:bg-brand-100')}>
                 <span className="w-6 text-center font-mono text-sm text-gray-400">{i + 1}</span>
-                <Cover url={s.coverUrl ?? s.reference?.thumbnailUrl} title={s.title} size={40} />
+                <Cover url={s.coverUrl ?? r?.thumbnailUrl} title={s.title} size={40} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-extrabold text-gray-900">{s.title}</span>
                   <span className="flex items-center gap-1 text-xs font-semibold text-gray-500">
-                    {s.reference ? <><ServiceMark source={s.reference.source} size={12} />{s.reference.label}</> : 'No reference, skipped'}
+                    {r ? <><ServiceMark source={r.source} size={12} />{r.label}</> : 'No reference, skipped'}
                   </span>
                 </span>
+                {now && <span className="shrink-0 pr-2 text-[11px] font-extrabold uppercase tracking-wide text-brand-700">Now</span>}
               </button>
             )
           })}
-          {index === songs.length - 1 && <p className="px-1 py-3 text-sm text-gray-500">That’s the last song in the set.</p>}
         </div>}
       </div>
     </div>,
