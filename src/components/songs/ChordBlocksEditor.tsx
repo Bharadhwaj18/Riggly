@@ -6,10 +6,11 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, arrayMove, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { ArrowDown, ArrowUp, Ban, Copy, GripVertical, Palette, Plus, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Ban, ClipboardCopy, Copy, GripVertical, Palette, Plus, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { RichBlockEditor } from './RichBlockEditor'
 import { newBlockId, sectionType, SECTION_COLORS, type ChartBlock, type SectionColor } from '@/lib/chords/blocks'
+import type { PastedSection } from '@/lib/chords/paste-sections'
 
 const SECTION_NAMES = ['Intro', 'Verse 1', 'Verse 2', 'Pre-chorus', 'Chorus', 'Bridge', 'Solo', 'Interlude', 'Outro']
 
@@ -49,6 +50,23 @@ export function ChordBlocksEditor({ blocks, onChange, colors, onColorChange }: P
     onChange(blocks.filter((_, i) => i !== index))
   }
   const add = () => onChange([...blocks, { id: newBlockId(), heading: '', text: '' }])
+  /** A pasted chord sheet with section names: this section's new text, and a card for each section after it. */
+  const pasteSections = (index: number, paste: { text: string; heading?: string; sections: PastedSection[] }) => {
+    const current = { ...blocks[index], text: paste.text, ...(paste.heading !== undefined ? { heading: paste.heading } : {}) }
+    const added = paste.sections.map(s => ({ id: newBlockId(), heading: s.heading, text: s.text }))
+    onChange([...blocks.slice(0, index), current, ...added, ...blocks.slice(index + 1)])
+  }
+  /** For an empty section, other sections of the same kind it could copy ("Chorus 2" → "Chorus 1"). */
+  const copySources = (block: ChartBlock): ChartBlock[] => {
+    const type = sectionType(block.heading)
+    if (!type || block.text.trim()) return []
+    const seen = new Set<string>()
+    return blocks.filter(b => {
+      if (b.id === block.id || sectionType(b.heading) !== type || !b.text.trim() || seen.has(b.text)) return false
+      seen.add(b.text)
+      return true
+    }).slice(0, 3)
+  }
 
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return
@@ -78,6 +96,8 @@ export function ChordBlocksEditor({ blocks, onChange, colors, onColorChange }: P
               onMove={by => move(i, by)}
               onDuplicate={() => duplicate(i)}
               onRemove={() => remove(i)}
+              copyFrom={copySources(block)}
+              onPasteSections={paste => pasteSections(i, paste)}
             />
           ))}
         </SortableContext>
@@ -94,6 +114,7 @@ export function ChordBlocksEditor({ blocks, onChange, colors, onColorChange }: P
       <p className="px-1 text-xs leading-relaxed text-gray-400">
         Chords on their own line above the words, or after a dash or colon (VERSE - F# E C#), are picked up
         by themselves and turn the chord colour. Tap into a section for the Chord, colour and highlight tools.
+        Paste a whole chord sheet and it&rsquo;s split into sections at their names ([Verse 1], Chorus:…).
       </p>
     </div>
   )
@@ -110,11 +131,13 @@ interface CardProps {
   onMove: (by: number) => void
   onDuplicate: () => void
   onRemove: () => void
+  copyFrom: ChartBlock[]
+  onPasteSections: (paste: { text: string; heading?: string; sections: PastedSection[] }) => void
 }
 
 const iconButton = 'flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30 disabled:hover:bg-transparent'
 
-function BlockCard({ block, index, count, namesListId, color, onColor, onChange, onMove, onDuplicate, onRemove }: CardProps) {
+function BlockCard({ block, index, count, namesListId, color, onColor, onChange, onMove, onDuplicate, onRemove, copyFrom, onPasteSections }: CardProps) {
   const [picking, setPicking] = useState(false)
   const type = sectionType(block.heading)
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: block.id })
@@ -194,10 +217,27 @@ function BlockCard({ block, index, count, namesListId, color, onColor, onChange,
           </button>
         </div>
       )}
+      {copyFrom.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-brand-100 px-3 py-1.5">
+          <span className="text-xs font-semibold text-gray-500">Same as before?</span>
+          {copyFrom.map(src => (
+            <button
+              key={src.id}
+              type="button"
+              onClick={() => onChange({ text: src.text, ...(src.kind ? { kind: src.kind } : {}) })}
+              className="flex h-7 items-center gap-1 rounded-lg border border-brand-200 px-2 text-xs font-bold text-gray-700 hover:border-brand-400 hover:bg-gray-50"
+            >
+              <ClipboardCopy className="h-3.5 w-3.5" /> Copy {src.heading.trim()}
+            </button>
+          ))}
+        </div>
+      )}
       <RichBlockEditor
         value={block.text}
         onChange={text => onChange({ text })}
         label={`${block.heading.trim() || 'Section'} chords and words`}
+        heading={block.heading}
+        onPasteSections={onPasteSections}
       />
     </div>
   )
