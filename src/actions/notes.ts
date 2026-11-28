@@ -103,6 +103,27 @@ export async function updateNote(id: string, data: NoteFormData): Promise<{ erro
 
 type Res = { error?: string }
 
+/**
+ * Edits just the words and who sees a note, for the in-place notes on a song or show. Unlike updateNote it leaves
+ * the note's pin, colour, labels and checklist alone, so a note made in the Notes app isn't stripped by a quick edit.
+ */
+export async function updateNoteText(id: string, data: { title: string; content: string; visibility: 'private' | 'shared' }): Promise<Res> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+  if (!data.title.trim() && !data.content.trim()) return { error: 'Add a title or some text' }
+  const { data: rows, error } = await supabase.from('notes').update({
+    title: data.title.trim(),
+    content: data.content.trim() || null,
+    visibility: data.visibility,
+    updated_by: user.id,
+  }).eq('id', id).select('id')
+  if (error) return { error: error.message }
+  if (!rows?.length) return { error: 'You can’t edit this note.' }
+  revalidatePath('/notes')
+  return {}
+}
+
 async function patch(id: string, fields: NoteUpdate): Promise<Res> {
   const supabase = await createClient()
   const { error } = await supabase.from('notes').update(fields).eq('id', id)
