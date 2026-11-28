@@ -26,6 +26,8 @@ const THEME_OVERRIDES = `
 .rich-chart p { margin: 0; min-height: 1.6em; }
 .rich-chart .chord-auto, .rich-chart .chord-mark { color: var(--chord-color); font-weight: 700; }
 .rich-chart .chord-mark { background: color-mix(in srgb, var(--chord-color) 18%, transparent); border-radius: 3px; }
+/* Bits added to the selection with Cmd (Ctrl on Windows) held, so one tap marks or colours them all. */
+.rich-chart .multi-sel { background: rgb(59 130 246 / 0.35); border-radius: 2px; }
 .rich-chart p.is-editor-empty:first-child::before {
   content: attr(data-placeholder); color: var(--color-gray-400); float: left; height: 0; pointer-events: none; white-space: pre-wrap;
 }
